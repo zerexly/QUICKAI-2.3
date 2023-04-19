@@ -33,6 +33,35 @@
 - [x] Paragraph Writer
 - [x] Content Rephrase
 
+## 🥀 Features - General Writing
+- [x] Text Extender
+- [X] Content Shorten
+- [x] Quora Answer
+- [x] Summarize for a 2nd grader
+- [x] Stories
+- [x] Bullent Point Answer
+- [x] Defination
+- [x] Answers
+- [x] Questions
+- [x] Passive to Active Voice
+- [x] Pros and Cons
+- [x] Rewrite With Keywords
+- [x] Emails
+- [x] Emails v2
+- [x] Email Subject Lines
+- [x] Startup Nmae Generator
+- [x] Company Bois
+- [x] Company Mission
+- [x] Company Vision
+- [x] Grammer Correction
+
+## 🎭 Features - Ecommerce
+- [x] Product Name Generator
+- [X] Product Description
+- [x] Amazon Product Titles
+- [x] Amazon Product Description
+- [x] Amazon Product Features
+
 ###
 If you liked this repository, feel free to leave a star ⭐ to help promote !
 
