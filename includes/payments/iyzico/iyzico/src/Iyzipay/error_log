@@ -1,0 +1,4 @@
+[10-Oct-2017 21:50:49 Europe/Istanbul] PHP Fatal error:  Class 'Iyzipay\BaseModel' not found in /home/neyazilim/public_html/src/Iyzipay/Request.php on line 6
+[10-Oct-2017 21:51:04 Europe/Istanbul] PHP Fatal error:  Interface 'Iyzipay\JsonConvertible' not found in /home/neyazilim/public_html/src/Iyzipay/BaseModel.php on line 5
+[10-Oct-2017 21:51:07 Europe/Istanbul] PHP Fatal error:  Interface 'Iyzipay\HttpClient' not found in /home/neyazilim/public_html/src/Iyzipay/DefaultHttpClient.php on line 6
+[10-Oct-2017 21:51:12 Europe/Istanbul] PHP Fatal error:  Class 'Iyzipay\ApiResource' not found in /home/neyazilim/public_html/src/Iyzipay/IyzipayResource.php on line 6
