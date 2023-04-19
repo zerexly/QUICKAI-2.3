@@ -1,4 +1,4 @@
-**How to Manage languages in QuickAI**
+## How to Manage languages in QuickAI
 We have a multi-language management tool in our admin panel, here you can add your choice of language and manage it, and you can enable or disable any time. QuickCMS supports all languages.
 
 To add any language you need to go to Admin panel > Languages.
