@@ -1,6 +1,6 @@
-**How to install QuickAI**
+# How to install QuickAI
 
-Create a new database on your MySQL server, after unzipping the file you downloaded from CodeCanyon and uploading the contents of the QUICKAI-CMS-VERSION folder to your server root, usually /path/to/www/ or /path/to/html/ or /path/to/public_html/.
+Create a new database on your MySQL server, after unzipping the file you downloaded from CodeCanyon and uploading the contents of the QUICKAI folder to your server root, usually `/path/to/www/` or `/path/to/html/` or `/path/to/public_html/`.
 
 Important: Make sure that .htaccess file got copied properly from the download to main QuickAI folder on your server.
 Sometimes, Operation systems hide .htaccess file.
