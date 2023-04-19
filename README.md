@@ -62,6 +62,40 @@
 - [x] Amazon Product Description
 - [x] Amazon Product Features
 
+## 💫 Features - Social Media
+- [x] Social Media Post(Personal)
+- [X] Social Media Post(Business)
+- [x] Instagram Captions
+- [x] Instagram Hastags
+- [x] Twitter Tweets
+- [x] YouTube Titles
+- [x] YouTube Descriptions
+- [x] YouTube Outlines
+- [x] Linkedin Posts
+- [x] Tik Tok Scripts
+
+## ⛩️ Features - Ads And Marketing Tools
+- [x] Facebook Ads
+- [X] Facebook Ads Headlines
+- [x] Google Ad Titles
+- [x] Google Ad Descriptions
+- [x] Linkdin Ad Headlines
+- [x] Linkdin Ad Descriptions
+- [x] App and SMS Notifications
+
+## 🎈 Features - Website
+- [x] SEO Meta Tags (Blog Post)
+- [X] SEO Meta Tags (Homepage)
+- [x] SEO Meta Tags (Product Page)
+
+## 🎗️ Features - Other
+- [x] Tone Changer
+- [X] Song Lyrics
+- [x] Translate
+- [x] FAQs
+- [x] FAQs Answers
+- [x] Testimonials / Reviews
+
 ###
 If you liked this repository, feel free to leave a star ⭐ to help promote !
 
