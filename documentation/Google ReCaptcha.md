@@ -1,4 +1,4 @@
-**Setup Google ReCaptcha in QuickAI**
+# Setup Google ReCaptcha in QuickAI
 To setup the Google ReCaptcha, follow the below steps:
 
 1. Go to the [Google reCAPTCHA](https://www.google.com/recaptcha/admin/create) and register a new site.
