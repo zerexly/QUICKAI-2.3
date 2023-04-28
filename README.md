@@ -17,9 +17,6 @@
 <!-- ABOUT THE PROJECT -->
 
 <p align="center">
-  <a href="https://github.com/sahilarun/QUICKAI-2.3/actions">
-    <img alt="Tests Passing" src="https://github.com/sahilarun/QUICKAI-2.3/workflows/CodeQL/badge.svg" />
-  </a>
   <a href="https://github.com/sahilarun/QUICKAI-2.3/graphs/contributors">
     <img alt="GitHub Contributors" src="https://img.shields.io/github/contributors/sahilarun/QUICKAI-2.3" />
   </a>
