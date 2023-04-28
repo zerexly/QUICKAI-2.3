@@ -1,8 +1,4 @@
 
- [![Contributors][contributors-shield]][contributors-url]
-           [![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
 <center><img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=200&section=header&text=QuickAI&fontSize=80&fontAlignY=35&animation=twinkling&fontColor=gradient" /></center>
         
 
@@ -19,6 +15,28 @@
   </p>
 </p>
 <!-- ABOUT THE PROJECT -->
+
+<p align="center">
+  <a href="https://github.com/sahilarun/QUICKAI-2.3/actions">
+    <img alt="Tests Passing" src="https://github.com/sahilarun/QUICKAI-2.3/workflows/CodeQL/badge.svg" />
+  </a>
+  <a href="https://github.com/sahilarun/QUICKAI-2.3/graphs/contributors">
+    <img alt="GitHub Contributors" src="https://img.shields.io/github/contributors/sahilarun/QUICKAI-2.3" />
+  </a>
+  <a href="https://github.com/sahilarun/QUICKAI-2.3/issues">
+    <img alt="Issues" src="https://img.shields.io/github/issues/sahilarun/QUICKAI-2.3" />
+  </a>
+  <a href="https://github.com/sahilarun/QUICKAI-2.3/blob/master/LICENSE">
+    <img alt="Issues" src="https://img.shields.io/github/license/sahilarun/QUICKAI-2.3" />
+  </a>
+  <a href="https://github.com/sahilarun/QUICKAI-2.3/pulls">
+    <img alt="Issues" src="https://img.shields.io/github/issues-pr-closed/sahilarun/QUICKAI-2.3" />
+  </a>
+  <a href="https://github.com/sahilarun/QUICKAI-2.3/commits">
+    <img alt="Issues" src="https://img.shields.io/github/last-commit/sahilarun/QUICKAI-2.3" />
+  </a>
+  <a href="https://github.com/sahilarun/QUICKAI-2.3"><img alt="Statistics Graphs" src="https://repobeats.axiom.co/api/embed/966fb1f700b2ca070b73426ccafcc5dd2b7576fb.svg"></a>
+</p>
 
 ## 🌟 Features - Article And Blogs
 - [x] Blog Ideas
