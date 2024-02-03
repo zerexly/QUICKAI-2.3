@@ -24,6 +24,7 @@ if(isset($_REQUEST['action'])){
     if ($_REQUEST['action'] == "editLanguage") { editLanguage(); }
     if ($_REQUEST['action'] == "addMembershipPlan") { addMembershipPlan(); }
     if ($_REQUEST['action'] == "editMembershipPlan") { editMembershipPlan(); }
+    if ($_REQUEST['action'] == "editPrepaidPlan") { editPrepaidPlan(); }
     if ($_REQUEST['action'] == "addTax") { addTax(); }
     if ($_REQUEST['action'] == "editTax") { editTax(); }
     if ($_REQUEST['action'] == "addStaticPage") { addStaticPage(); }
@@ -44,6 +45,9 @@ if(isset($_REQUEST['action'])){
     if ($_REQUEST['action'] == "editAICustomTemplate") { editAICustomTemplate(); }
     if ($_REQUEST['action'] == "editAITplCategory") { editAITplCategory(); }
     if ($_REQUEST['action'] == "editAPIKey") { editAPIKey(); }
+    if ($_REQUEST['action'] == "editAIChatBot") { editAIChatBot(); }
+    if ($_REQUEST['action'] == "editAIChatBotCategory") { editAIChatBotCategory(); }
+    if ($_REQUEST['action'] == "editAIChatPrompts") { editAIChatPrompts(); }
 
     if ($_GET['action'] == "SaveSettings") { SaveSettings(); }
 }
@@ -72,13 +76,13 @@ function addEditAdmin() {
 
     $image = null;
     $error = array();
-    $name_length = strlen(utf8_decode($_POST['name']));
+    $name_length = mb_strlen($_POST['name']);
 
     if(empty($_POST["name"])) {
         $error[] = __("Enter your full name.");
     }
-    elseif( ($name_length < 4) OR ($name_length > 21) ) {
-        $error[] = __("Name must be between 4 and 20 characters long.");
+    elseif( ($name_length < 2) OR ($name_length > 41) ) {
+        $error[] = __("Name must be between 2 and 40 characters long.");
     }
 
     if(empty($_POST['username'])){
@@ -95,12 +99,11 @@ function addEditAdmin() {
 
     // Check if this is an Email availability
     $_POST["email"] = strtolower($_POST["email"]);
-    $regex = '/^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$/';
 
     if(empty($_POST["email"])) {
         $error[] = __("Please enter an email address");
     }
-    elseif(!preg_match($regex, $_POST['email'])) {
+    elseif(!filter_var($_POST["email"], FILTER_VALIDATE_EMAIL)) {
         $error[] = __("This is not a valid email address");
     }
     elseif(isset($_POST['id'])){
@@ -193,13 +196,13 @@ function addEditUser(){
         $_POST['user_type'] = "user";
     }
 
-    $name_length = strlen(($_POST['name']));
+    $name_length = mb_strlen(($_POST['name']));
 
     if(empty($_POST["name"])) {
         $error[] = __("Enter your full name.");
     }
-    elseif( ($name_length < 4) OR ($name_length > 21) ) {
-        $error[] = __("Name must be between 4 and 20 characters long.");
+    elseif( ($name_length < 2) OR ($name_length > 41) ) {
+        $error[] = __("Name must be between 2 and 40 characters long.");
     }
 
     if(empty($_POST['username'])){
@@ -212,13 +215,12 @@ function addEditUser(){
     }
 
     // Check if this is an Email availability
-    $_POST["email"] = strtolower($_POST["email"]);
-    $regex = '/^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$/';
+    $_POST["email"] = mb_strtolower($_POST["email"]);
 
     if(empty($_POST["email"])) {
         $error[] = __("Please enter an email address");
     }
-    elseif(!preg_match($regex, $_POST['email'])) {
+    elseif(!filter_var($_POST["email"], FILTER_VALIDATE_EMAIL)) {
         $error[] = __("This is not a valid email address");
     }
     elseif(!isset($_POST['id'])){
@@ -285,6 +287,22 @@ function addEditUser(){
                     ->delete_many();
             }
 
+            // reset the plan uses if the plan is changed
+            $user_data = get_user_data(null, $_POST['id']);
+            if($user_data['group_id'] != $_POST['current_plan']){
+                update_user_option($_POST['id'], 'total_words_used', 0);
+                update_user_option($_POST['id'], 'total_images_used', 0);
+                update_user_option($_POST['id'], 'total_speech_used', 0);
+                update_user_option($_POST['id'], 'total_text_to_speech_used', 0);
+
+                update_user_option($_POST['id'], 'last_reset_time', time());
+            }
+
+            update_user_option($_POST['id'], 'total_words_available', validate_input($_POST['total_words_available']));
+            update_user_option($_POST['id'], 'total_images_available', validate_input($_POST['total_images_available']));
+            update_user_option($_POST['id'], 'total_speech_available', validate_input($_POST['total_speech_available']));
+            update_user_option($_POST['id'], 'total_text_to_speech_available', validate_input($_POST['total_text_to_speech_available']));
+
             $users = ORM::for_table($config['db']['pre'].'user')->find_one($_POST['id']);
             $users->group_id = validate_input($_POST['current_plan']);
             $users->status = validate_input($_POST['status']);
@@ -302,9 +320,11 @@ function addEditUser(){
             if (!empty($image)) {
                 $users->image = $image;
             }
-            $users->created_at = $now;
             $users->updated_at = $now;
             $users->save();
+
+            /* Update trial done */
+            update_user_option($_POST['id'], 'package_trial_done', (int) $_POST['plan_trial_done']);
 
         } else {
             $password = $_POST["password"];
@@ -621,6 +641,7 @@ function addLanguage(){
 
             $filePath = '../includes/lang/lang_'.$post_filename.'.php';
             if (!file_exists($filePath)) {
+
                 $source = 'en';
                 $target = $_POST['code'];
                 $trans = new GoogleTranslate();
@@ -733,14 +754,10 @@ function addMembershipPlan()
         $active = isset($_POST['active']) ? 1 : 0;
 
         $_POST['ai_model'] = !empty($_POST['ai_model']) ? $_POST['ai_model'] : get_option('open_ai_model');
+        $_POST['ai_chat_model'] = !empty($_POST['ai_chat_model']) ? $_POST['ai_chat_model'] : get_option('open_ai_chat_model');
 
-        if($_POST['ai_model'] != 'gpt-3.5-turbo' && $_POST['ai_model'] != 'gpt-4'){
-            // disable chat if chatgpt is not selected
-            if($_POST['ai_chat']){
-                echo $json = '{"status" : "error","message" : "' . __('<strong>ChatGPT</strong> OpenAI model is required for AI Chat feature.') . '"}';
-                die();
-            }
-        }
+        $_POST['ai_templates'] = !empty($_POST['ai_templates']) ? $_POST['ai_templates'] : array();
+        $_POST['ai_chatbots'] = !empty($_POST['ai_chatbots']) ? $_POST['ai_chatbots'] : array();
 
         $settings = array(
             'ai_model' => $_POST['ai_model'],
@@ -748,7 +765,10 @@ function addMembershipPlan()
             'ai_words_limit' => (int) $_POST['ai_words_limit'],
             'ai_images_limit' => (int) $_POST['ai_images_limit'],
             'ai_chat' => (int) $_POST['ai_chat'],
+            'ai_chatbots' => $_POST['ai_chatbots'],
+            'ai_chat_model' => $_POST['ai_chat_model'],
             'ai_code' => (int) $_POST['ai_code'],
+            'ai_text_to_speech_limit' => (int) $_POST['ai_text_to_speech_limit'],
             'ai_speech_to_text_limit' => (int) $_POST['ai_speech_to_text_limit'],
             'ai_speech_to_text_file_limit' => (int) $_POST['ai_speech_to_text_file_limit'],
             'show_ads' => (int) $_POST['show_ads'],
@@ -811,14 +831,10 @@ function editMembershipPlan()
         $active = $_POST['active'] ? 1 : 0;
 
         $_POST['ai_model'] = !empty($_POST['ai_model']) ? $_POST['ai_model'] : get_option('open_ai_model');
+        $_POST['ai_chat_model'] = !empty($_POST['ai_chat_model']) ? $_POST['ai_chat_model'] : get_option('open_ai_chat_model');
 
-        if($_POST['ai_model'] != 'gpt-3.5-turbo' && $_POST['ai_model'] != 'gpt-4'){
-            // disable chat if chatgpt is not selected
-            if($_POST['ai_chat']){
-                echo $json = '{"status" : "error","message" : "' . __('<strong>ChatGPT</strong> OpenAI model is required for AI Chat feature.') . '"}';
-                die();
-            }
-        }
+        $_POST['ai_templates'] = !empty($_POST['ai_templates']) ? $_POST['ai_templates'] : array();
+        $_POST['ai_chatbots'] = !empty($_POST['ai_chatbots']) ? $_POST['ai_chatbots'] : array();
 
         $settings = array(
             'ai_model' => $_POST['ai_model'],
@@ -826,7 +842,10 @@ function editMembershipPlan()
             'ai_words_limit' => (int) $_POST['ai_words_limit'],
             'ai_images_limit' => (int) $_POST['ai_images_limit'],
             'ai_chat' => (int) $_POST['ai_chat'],
+            'ai_chatbots' => $_POST['ai_chatbots'],
+            'ai_chat_model' => $_POST['ai_chat_model'],
             'ai_code' => (int) $_POST['ai_code'],
+            'ai_text_to_speech_limit' => (int) $_POST['ai_text_to_speech_limit'],
             'ai_speech_to_text_limit' => (int) $_POST['ai_speech_to_text_limit'],
             'ai_speech_to_text_file_limit' => (int) $_POST['ai_speech_to_text_file_limit'],
             'show_ads' => (int) $_POST['show_ads'],
@@ -909,6 +928,59 @@ function editMembershipPlan()
     die();
 }
 
+function editPrepaidPlan() {
+    global $config;
+
+    if (isset($_POST['submit'])) {
+        $_POST = validate_input($_POST);
+
+        if ($_POST['name'] == "") {
+            echo $json = '{"status" : "error","message" : "' . __('Please fill the required fields.') . '"}';
+            die();
+        }
+
+        $active = $_POST['active'] ? 1 : 0;
+
+        $settings = array(
+            'ai_words_limit' => (int) $_POST['ai_words_limit'],
+            'ai_images_limit' => (int) $_POST['ai_images_limit'],
+            'ai_text_to_speech_limit' => (int) $_POST['ai_text_to_speech_limit'],
+            'ai_speech_to_text_limit' => (int) $_POST['ai_speech_to_text_limit'],
+        );
+
+        if ($_POST['price'] == "") {
+            echo $json = '{"status" : "error","message" : "' . __('Please fill the required fields.') . '"}';
+            die();
+        }
+
+        $recommended = $_POST['recommended'] ? "yes" : "no";
+
+        if (isset($_POST['id'])) {
+            $prepaid_plans = ORM::for_table($config['db']['pre'] . 'prepaid_plans')->find_one($_POST['id']);
+        } else {
+            $prepaid_plans = ORM::for_table($config['db']['pre'].'prepaid_plans')->create();
+        }
+        $prepaid_plans->name = validate_input($_POST['name']);
+        $prepaid_plans->price = $_POST['price'];
+        $prepaid_plans->settings = json_encode($settings);
+        $prepaid_plans->taxes_ids = isset($_POST['taxes'])? validate_input(implode(',',$_POST['taxes'])) : null;
+        $prepaid_plans->status = $active;
+        $prepaid_plans->recommended = $recommended;
+        $prepaid_plans->date = date('Y-m-d H:i:s');
+        $prepaid_plans->save();
+
+        $status = "success";
+        $message = __("Saved Successfully");
+
+    } else {
+        $status = "error";
+        $message = __("Error: Please try again.");
+    }
+
+    echo $json = '{"status" : "' . $status . '","message" : "' . $message . '"}';
+    die();
+}
+
 function addStaticPage(){
     global $config;
     $error = array();
@@ -932,7 +1004,7 @@ function addStaticPage(){
         $insert_page->translation_lang = 'en';
         $insert_page->name = validate_input($_POST['name']);
         $insert_page->title = validate_input($_POST['title']);
-        $insert_page->content = validate_input($_POST['content'],true);
+        $insert_page->content = validate_input($_POST['content'],true, true);
         $insert_page->slug = $slug;
         $insert_page->type = validate_input($_POST['type']);
         $insert_page->active = validate_input($_POST['active']);
@@ -958,7 +1030,7 @@ function addStaticPage(){
             $insert_page->parent_id = $id;
             $insert_page->name = validate_input($_POST['name']);
             $insert_page->title = validate_input($_POST['title']);
-            $insert_page->content = validate_input($_POST['content'],true);
+            $insert_page->content = validate_input($_POST['content'],true, true);
             $insert_page->slug = $slug;
             $insert_page->type = validate_input($_POST['type']);
             $insert_page->active = validate_input($_POST['active']);
@@ -999,7 +1071,7 @@ function editStaticPage(){
             $update_page = ORM::for_table($config['db']['pre'].'pages')->find_one($_POST['id']);
             $update_page->set('name', validate_input($_POST['name']));
             $update_page->set('title', validate_input($_POST['title']));
-            $update_page->set('content', validate_input($_POST['content'],true));
+            $update_page->set('content', validate_input($_POST['content'],true, true));
             $update_page->set('slug', $slug);
             $update_page->set('type', validate_input($_POST['type']));
             $update_page->set('active', validate_input($_POST['active']));
@@ -1199,6 +1271,7 @@ function paymentEdit()
 
         if(isset($_POST['company_bank_info'])){
             update_option("company_bank_info",$_POST['company_bank_info']);
+            update_option("wire_transfer_payment_proof",$_POST['wire_transfer_payment_proof']);
         }
 
         if(isset($_POST['company_cheque_info'])){
@@ -1259,6 +1332,35 @@ function paymentEdit()
             update_option("razorpay_secret_key",$_POST['razorpay_secret_key']);
         }
 
+        if(isset($_POST['flutterwave_api_key'])){
+            update_option("flutterwave_api_key",$_POST['flutterwave_api_key']);
+            update_option("flutterwave_secret_key",$_POST['flutterwave_secret_key']);
+        }
+
+        if(isset($_POST['yoomoney_shop_id'])){
+            update_option("yoomoney_shop_id",$_POST['yoomoney_shop_id']);
+            update_option("yoomoney_secret_key",$_POST['yoomoney_secret_key']);
+        }
+
+        if(isset($_POST['coinbase_api_key'])){
+            update_option("coinbase_api_key",$_POST['coinbase_api_key']);
+            update_option("coinbase_webhook_secret",$_POST['coinbase_webhook_secret']);
+        }
+
+        if(isset($_POST['mercadopago_access_token'])){
+            update_option("mercadopago_access_token",$_POST['mercadopago_access_token']);
+        }
+        if(isset($_POST['paddle_sandbox_mode'])){
+            update_option("paddle_sandbox_mode",$_POST['paddle_sandbox_mode']);
+            update_option("paddle_vendor_id",$_POST['paddle_vendor_id']);
+            update_option("paddle_api_key",$_POST['paddle_api_key']);
+            update_option("paddle_public_key",$_POST['paddle_public_key']);
+        }
+        if(isset($_POST['sslcommerz_sandbox_mode'])){
+            update_option("sslcommerz_sandbox_mode",$_POST['sslcommerz_sandbox_mode']);
+            update_option("sslcommerz_store_id",$_POST['sslcommerz_store_id']);
+            update_option("sslcommerz_store_pass",$_POST['sslcommerz_store_pass']);
+        }
         $status = "success";
         $message = __("Saved Successfully");
 
@@ -1371,6 +1473,7 @@ function testEmailTemplate(){
 
     global $config,$lang,$link;
     $_POST = validate_input($_POST);
+    $errors = null;
 
     $test_to_email = $_POST['test_to_email'];
     $test_to_name = $_POST['test_to_name'];
@@ -1395,7 +1498,7 @@ function testEmailTemplate(){
                 $html = str_replace ('{USER_FULLNAME}', $test_to_name, $html);
                 $email_body = $html;
 
-                email($test_to_email,$test_to_name,$email_subject,$email_body);
+                $errors = email($test_to_email,$test_to_name,$email_subject,$email_body);
                 break;
 
             case 'create-account':
@@ -1418,7 +1521,7 @@ function testEmailTemplate(){
                 $html = str_replace ('{USER_FULLNAME}', $test_to_name, $html);
                 $email_body = $html;
 
-                email($test_to_email,$test_to_name,$email_subject,$email_body);
+                $errors = email($test_to_email,$test_to_name,$email_subject,$email_body);
                 break;
 
             case 'forgot-pass':
@@ -1439,7 +1542,7 @@ function testEmailTemplate(){
                 $html = str_replace ('{USER_FULLNAME}', $test_to_name, $html);
                 $email_body = $html;
 
-                email($test_to_email,$test_to_name,$email_subject,$email_body);
+                $errors = email($test_to_email,$test_to_name,$email_subject,$email_body);
                 break;
 
             case 'contact_us':
@@ -1461,7 +1564,7 @@ function testEmailTemplate(){
                 $html = str_replace ('{MESSAGE}', "Test Message", $html);
                 $email_body = $html;
 
-                email($test_to_email,$test_to_name,$email_subject,$email_body);
+                $errors = email($test_to_email,$test_to_name,$email_subject,$email_body);
                 break;
             case 'feedback':
                 $html = $config['email_sub_feedback'];
@@ -1483,7 +1586,7 @@ function testEmailTemplate(){
                 $html = str_replace ('{MESSAGE}', "Test Message", $html);
                 $email_body = $html;
 
-                email($test_to_email,$test_to_name,$email_subject,$email_body);
+                $errors = email($test_to_email,$test_to_name,$email_subject,$email_body);
                 break;
 
             case 'report':
@@ -1509,15 +1612,21 @@ function testEmailTemplate(){
                 $html = str_replace ('{DETAILS}', "Violator Message details here", $html);
                 $email_body = $html;
 
-                email($test_to_email,$test_to_name,$email_subject,$email_body);
+                $errors = email($test_to_email,$test_to_name,$email_subject,$email_body);
                 break;
         }
     }
 
-    $status = "success";
-    $message = __("Email Sent Successfully");
+    $result = [];
+    $result['status'] = "success";
+    $result['message'] = __("Email Sent Successfully");
 
-    echo '{"status" : "' . $status . '","message" : "' . $message . '"}';
+    if(is_array($errors) && !empty($errors)){
+        $result['status'] = "error";
+        $result['message'] = implode('<br />', $errors);
+    }
+
+    echo json_encode($result);
     die();
 }
 
@@ -1618,9 +1727,9 @@ function editAdvertise() {
 
         $adsense = ORM::for_table($config['db']['pre'] . 'adsense')->find_one(validate_input($_POST['id']));
         $adsense->provider_name = validate_input($_POST['provider_name']);
-        $adsense->large_track_code = validate_input($_POST['large_track_code'], true);
-        $adsense->tablet_track_code = validate_input($_POST['tablet_track_code'], true);
-        $adsense->phone_track_code = validate_input($_POST['phone_track_code'], true);
+        $adsense->large_track_code = $_POST['large_track_code'];
+        $adsense->tablet_track_code = $_POST['tablet_track_code'];
+        $adsense->phone_track_code = $_POST['phone_track_code'];
         $adsense->status = validate_input($_POST['status']);
         $adsense->save();
 
@@ -1687,11 +1796,19 @@ function editAITemplate() {
 
         $_POST['icon'] = empty($_POST['icon']) ? 'fa fa-check-square' : $_POST['icon'];
 
+        $settings = [
+            'language' => $_POST['language'],
+            'quality_type' => $_POST['quality_type'],
+            'tone_of_voice' => $_POST['tone_of_voice'],
+        ];
+
         $template = ORM::for_table($config['db']['pre'] . 'ai_templates')->find_one($_POST['id']);
         $template->title = $_POST['title'];
         $template->icon = $_POST['icon'];
         $template->category_id = $_POST['category'];
         $template->description = $_POST['description'];
+        $template->translations = json_encode($_POST['translations'], JSON_UNESCAPED_UNICODE);
+        $template->settings = json_encode($settings);
         $template->active = $_POST['active'];
         $template->save();
 
@@ -1764,10 +1881,18 @@ function editAICustomTemplate() {
                 'placeholder' => escape($_POST['parameter_placeholder'][$key]),
                 'options' => $_POST['parameter_type'][$key] == 'select'
                     ? escape($_POST['parameter_options'][$key])
-                    : ''
+                    : '',
+                'translations' => $_POST['parameter_translations'][$key],
+                'required' => isset($_POST['parameter_required'][$key]) ? 1 : 0
             );
         }
     }
+
+    $settings = [
+        'language' => $_POST['language'],
+        'quality_type' => $_POST['quality_type'],
+        'tone_of_voice' => $_POST['tone_of_voice'],
+    ];
 
     if(!empty($_POST['id'])) {
         $template = ORM::for_table($config['db']['pre'] . 'ai_custom_templates')->find_one($_POST['id']);
@@ -1781,6 +1906,8 @@ function editAICustomTemplate() {
     $template->description = $_POST['description'];
     $template->prompt = $_POST['prompt'];
     $template->parameters = json_encode($parameter, JSON_UNESCAPED_UNICODE);
+    $template->translations = json_encode($_POST['translations'], JSON_UNESCAPED_UNICODE);
+    $template->settings = json_encode($settings);
     $template->active = $_POST['active'];
     $template->save();
 
@@ -1788,8 +1915,6 @@ function editAICustomTemplate() {
     $result['id'] = $template->id();
     $result['message'] = __('Successfully Saved.');
     die(json_encode($result));
-
-
 }
 
 function editAITplCategory() {
@@ -1809,6 +1934,7 @@ function editAITplCategory() {
         $template = ORM::for_table($config['db']['pre'] . 'ai_template_categories')->create();
     }
     $template->title = $_POST['title'];
+    $template->translations = json_encode($_POST['translations'], JSON_UNESCAPED_UNICODE);
     $template->active = $_POST['active'];
     $template->save();
 
@@ -1816,8 +1942,6 @@ function editAITplCategory() {
     $result['id'] = $template->id();
     $result['message'] = __('Successfully Saved.');
     die(json_encode($result));
-
-
 }
 
 function editAPIKey() {
@@ -1851,8 +1975,139 @@ function editAPIKey() {
     $result['id'] = $api_key->id();
     $result['message'] = __('Successfully Saved.');
     die(json_encode($result));
+}
 
+function editAIChatBot() {
+    global $config;
 
+    $welcome_message = $_POST['welcome_message'];
+    $_POST = validate_input($_POST);
+    $_POST['welcome_message'] = validate_input($welcome_message, true);
+
+    $image = null;
+
+    if(empty($_POST['name'])){
+        $result['status'] = 'error';
+        $result['message'] = __('Name is required.');
+        die(json_encode($result));
+    }
+    if(empty($_POST['prompt'])){
+        $result['status'] = 'error';
+        $result['message'] = __('Prompt is required.');
+        die(json_encode($result));
+    }
+
+    if (isset($_FILES['image']['name']) && $_FILES['image']['name'] != "") {
+        $target_dir = ROOTPATH . "/storage/chat-bots/";
+        $result = quick_file_upload('image', $target_dir);
+        if ($result['success']) {
+            $image = $result['file_name'];
+            resizeImage(300, $target_dir . $image, $target_dir . $image);
+            if (isset($_POST['id'])) {
+                // remove old image
+                $info = ORM::for_table($config['db']['pre'] . 'ai_chat_bots')
+                    ->select('image')
+                    ->find_one($_POST['id']);
+
+                if (!empty(trim((string)$info['image'])) && $info['image'] != "default_user.png") {
+                    if (file_exists($target_dir . $info['image'])) {
+                        unlink($target_dir . $info['image']);
+                    }
+                }
+            }
+        } else {
+            $result['status'] = 'error';
+            $result['message'] = $result['error'];
+            die(json_encode($result));
+        }
+    }
+
+    if (!empty($_POST['id'])) {
+        $bot = ORM::for_table($config['db']['pre'] . 'ai_chat_bots')->find_one($_POST['id']);
+    } else {
+        $bot = ORM::for_table($config['db']['pre'] . 'ai_chat_bots')->create();
+    }
+    $bot->name = $_POST['name'];
+    $bot->welcome_message = $_POST['welcome_message'];
+    $bot->role = $_POST['role'];
+    $bot->prompt = $_POST['prompt'];
+    $bot->training_data = $_POST['training_data'];
+    $bot->category_id = $_POST['category'];
+    $bot->translations = json_encode($_POST['translations'], JSON_UNESCAPED_UNICODE);
+    $bot->active = $_POST['active'];
+
+    if($image)
+        $bot->image = $image;
+
+    $bot->save();
+
+    $result['status'] = 'success';
+    $result['id'] = $bot->id();
+    $result['message'] = __('Successfully Saved.');
+    die(json_encode($result));
+}
+
+function editAIChatBotCategory() {
+    global $config;
+
+    $_POST = validate_input($_POST);
+
+    if(empty($_POST['title'])){
+        $result['status'] = 'error';
+        $result['message'] = __('Title is required.');
+        die(json_encode($result));
+    }
+
+    if(!empty($_POST['id'])) {
+        $template = ORM::for_table($config['db']['pre'] . 'ai_chat_bots_categories')->find_one($_POST['id']);
+    }else {
+        $template = ORM::for_table($config['db']['pre'] . 'ai_chat_bots_categories')->create();
+    }
+    $template->title = $_POST['title'];
+    $template->translations = json_encode($_POST['translations'], JSON_UNESCAPED_UNICODE);
+    $template->active = $_POST['active'];
+    $template->save();
+
+    $result['status'] = 'success';
+    $result['id'] = $template->id();
+    $result['message'] = __('Successfully Saved.');
+    die(json_encode($result));
+}
+
+function editAIChatPrompts() {
+    global $config;
+
+    $_POST = validate_input($_POST);
+
+    if(empty($_POST['title'])){
+        $result['status'] = 'error';
+        $result['message'] = __('Title is required.');
+        die(json_encode($result));
+    }
+    if(empty($_POST['prompt'])){
+        $result['status'] = 'error';
+        $result['message'] = __('Prompt is required.');
+        die(json_encode($result));
+    }
+
+    if (!empty($_POST['id'])) {
+        $prompt = ORM::for_table($config['db']['pre'] . 'ai_chat_prompts')->find_one($_POST['id']);
+    } else {
+        $prompt = ORM::for_table($config['db']['pre'] . 'ai_chat_prompts')->create();
+    }
+    $prompt->title = $_POST['title'];
+    $prompt->chat_bots = !empty($_POST['chat_bots'])? validate_input(implode(',',$_POST['chat_bots'])) : null;
+    $prompt->description = $_POST['description'];
+    $prompt->prompt = $_POST['prompt'];
+    $prompt->translations = json_encode($_POST['translations'], JSON_UNESCAPED_UNICODE);
+    $prompt->active = $_POST['active'];
+
+    $prompt->save();
+
+    $result['status'] = 'success';
+    $result['id'] = $prompt->id();
+    $result['message'] = __('Successfully Saved.');
+    die(json_encode($result));
 }
 
 function SaveSettings(){
@@ -2038,6 +2293,37 @@ function SaveSettings(){
 
         }
 
+        if (isset($_FILES['metaimage']) && $_FILES['metaimage']['tmp_name'] != "") {
+            $filename = stripslashes($_FILES['metaimage']['name']);
+            $ext = getExtension($filename);
+            $ext = strtolower($ext);
+            //File extension check
+            if (in_array($ext, $valid_formats)) {
+                $uploaddir = "../storage/logo/"; //Image upload directory
+
+                //Convert extension into a lower case format
+                $adminlogo = $uploaddir . get_option('site_metaimage');
+                if(file_exists($adminlogo) && !is_dir($adminlogo)){
+                    unlink($adminlogo);
+                }
+                $result = quick_file_upload('metaimage', $uploaddir);
+                //Moving file to uploads folder
+                if ($result['success']) {
+                    update_option("site_metaimage",$result['file_name']);
+                    $status = "success";
+                    $message = __("Updated Successfully");
+                } else {
+                    $status = "error";
+                    $message = __("Error: Please try again.");
+                }
+            }
+            else {
+                $status = "error";
+                $message = __("Only allowed jpg, jpeg png");
+            }
+
+        }
+
         if($status == ""){
             $status = "success";
             $message = __("Saved Successfully");
@@ -2050,10 +2336,13 @@ function SaveSettings(){
         update_option("site_title",$_POST['site_title']);
         update_option("disable_landing_page", $_POST['disable_landing_page']);
         update_option("enable_maintenance_mode", $_POST['enable_maintenance_mode']);
+        update_option("enable_user_registration", $_POST['enable_user_registration']);
+        update_option("enable_faqs", $_POST['enable_faqs']);
         update_option("non_active_msg",$_POST['non_active_msg']);
         update_option("non_active_allow",$_POST['non_active_allow']);
         update_option("transfer_filter",$_POST['transfer_filter']);
         update_option("default_user_plan",validate_input($_POST['default_user_plan']));
+        update_option("hide_plan_disabled_features",validate_input($_POST['hide_plan_disabled_features']));
         update_option("cron_exec_time",validate_input($_POST['cron_exec_time']));
         update_option("userlangsel",$_POST['userlangsel']);
         update_option("termcondition_link",validate_input($_POST['termcondition_link']));
@@ -2092,6 +2381,7 @@ function SaveSettings(){
         }
         update_option("specific_country",$_POST['specific_country']);
         update_option("lang",$_POST['lang']);
+        update_option("browser_lang",(int) $_POST['browser_lang']);
         update_option("timezone",$_POST['timezone']);
         update_option("currency_sign",$currency_sign);
         update_option("currency_code",$currency_code);
@@ -2103,6 +2393,7 @@ function SaveSettings(){
     if (isset($_POST['email_setting'])) {
 
         update_option("admin_email",$_POST['admin_email']);
+        update_option("from_email",$_POST['from_email']);
         update_option("email_type",$_POST['email_type']);
 
         update_option("smtp_host",$_POST['smtp_host']);
@@ -2112,16 +2403,6 @@ function SaveSettings(){
         update_option("smtp_secure",$_POST['smtp_secure']);
         update_option("smtp_auth",$_POST['smtp_auth']);
 
-        update_option("aws_host",$_POST['aws_host']);
-        update_option("aws_access_key",$_POST['aws_access_key']);
-        update_option("aws_secret_key",$_POST['aws_secret_key']);
-
-        update_option("mandrill_user",$_POST['mandrill_user']);
-        update_option("mandrill_key",$_POST['mandrill_key']);
-
-        update_option("sendgrid_user",$_POST['sendgrid_user']);
-        update_option("sendgrid_pass",$_POST['sendgrid_pass']);
-
         $status = "success";
         $message = __("Saved Successfully");
     }
@@ -2129,6 +2410,7 @@ function SaveSettings(){
     if (isset($_POST['theme_setting'])) {
         update_option("show_membershipplan_home",validate_input($_POST['show_membershipplan_home']));
         update_option("show_partner_logo_home",validate_input($_POST['show_partner_logo_home']));
+        update_option("show_newsletter_form_home",validate_input($_POST['show_newsletter_form_home']));
         update_option("theme_color",validate_input($_POST['theme_color']));
         update_option("meta_keywords",validate_input($_POST['meta_keywords']));
         update_option("meta_description",validate_input($_POST['meta_description']));
@@ -2136,6 +2418,8 @@ function SaveSettings(){
         update_option("contact_phone",validate_input($_POST['contact_phone']));
         update_option("contact_email",validate_input($_POST['contact_email']));
         update_option("footer_text",validate_input($_POST['footer_text']));
+        update_option("android_app_link",validate_input($_POST['android_app_link']));
+        update_option("ios_app_link",validate_input($_POST['ios_app_link']));
         update_option("copyright_text",validate_input($_POST['copyright_text']));
         update_option("facebook_link",validate_input($_POST['facebook_link']));
         update_option("twitter_link",validate_input($_POST['twitter_link']));
@@ -2149,6 +2433,7 @@ function SaveSettings(){
     }
 
     if (isset($_POST['billing_details'])) {
+        update_option("enable_tax_billing", validate_input($_POST['enable_tax_billing']));
         update_option("invoice_nr_prefix", validate_input($_POST['invoice_nr_prefix']));
         update_option("invoice_admin_name", validate_input($_POST['invoice_admin_name']));
         update_option("invoice_admin_email", validate_input($_POST['invoice_admin_email']));
@@ -2171,6 +2456,7 @@ function SaveSettings(){
         update_option("open_ai_model", validate_input($_POST['open_ai_model']));
 
         update_option("open_ai_api_key", validate_input($_POST['open_ai_api_key']));
+        update_option("enable_ai_templates", validate_input($_POST['enable_ai_templates']));
         update_option("ai_languages", validate_input($_POST['ai_languages']));
         update_option("ai_default_lang", validate_input($_POST['ai_default_lang']));
         update_option("ai_default_quality_type", validate_input($_POST['ai_default_quality_type']));
@@ -2189,8 +2475,27 @@ function SaveSettings(){
         update_option("ai_code_max_token", validate_input($_POST['ai_code_max_token']));
 
         update_option("enable_ai_chat", validate_input($_POST['enable_ai_chat']));
+        update_option("open_ai_chat_model", validate_input($_POST['open_ai_chat_model']));
         update_option("ai_chat_max_token", validate_input($_POST['ai_chat_max_token']));
+        update_option("enable_default_chat_bot", validate_input($_POST['enable_default_chat_bot']));
         update_option("ai_chat_bot_name", validate_input($_POST['ai_chat_bot_name']));
+        update_option("enable_ai_chat_mic", validate_input($_POST['enable_ai_chat_mic']));
+        update_option("enable_ai_chat_prompts", validate_input($_POST['enable_ai_chat_prompts']));
+        update_option("enable_chat_typing_effect", validate_input($_POST['enable_chat_typing_effect']));
+        update_option("enable_ai_chat_enter_send", validate_input($_POST['enable_ai_chat_enter_send']));
+
+        update_option("enable_text_to_speech", validate_input($_POST['enable_text_to_speech']));
+        update_option("enable_tts_translation", validate_input($_POST['enable_tts_translation']));
+        update_option("ai_tts_language", validate_input($_POST['ai_tts_language']));
+        update_option("ai_tts_voice", validate_input($_POST['ai_tts_voice']));
+
+        update_option("enable_aws_tts", validate_input($_POST['enable_aws_tts']));
+        update_option("ai_tts_aws_access_key", validate_input($_POST['ai_tts_aws_access_key']));
+        update_option("ai_tts_aws_secret_key", validate_input($_POST['ai_tts_aws_secret_key']));
+        update_option("ai_tts_aws_region", validate_input($_POST['ai_tts_aws_region']));
+
+        update_option("enable_google_tts", validate_input($_POST['enable_google_tts']));
+        update_option("ai_tts_google_json_path", validate_input($_POST['ai_tts_google_json_path']));
 
         update_option("ai_proxies", validate_input($_POST['ai_proxies']));
 
@@ -2214,7 +2519,7 @@ function SaveSettings(){
                 //Moving file to uploads folder
                 if ($result['success']) {
                     update_option("chat_bot_avatar", $result['file_name']);
-                    resizeImage(90, $uploaddir . $result['file_name'], $uploaddir . $result['file_name']);
+                    resizeImage(300, $uploaddir . $result['file_name'], $uploaddir . $result['file_name']);
                 } else {
                     $status = "error";
                     $message = __("Error: Please try again.");
@@ -2236,7 +2541,9 @@ function SaveSettings(){
         update_option("enable_affiliate_program",validate_input($_POST['enable_affiliate_program']));
         update_option("affiliate_rule",validate_input($_POST['affiliate_rule']));
         update_option("affiliate_commission_rate",validate_input((int) $_POST['affiliate_commission_rate']));
+        update_option("allow_affiliate_payouts",validate_input((int) $_POST['allow_affiliate_payouts']));
         update_option("affiliate_minimum_payout",validate_input((int) $_POST['affiliate_minimum_payout']));
+        update_option("affiliate_payout_methods",validate_input($_POST['affiliate_payout_methods']));
         $status = "success";
         $message = __("Saved Successfully");
     }
@@ -2289,44 +2596,52 @@ function SaveSettings(){
         $message = __("Saved Successfully");
     }
 
-    if (isset($_POST['valid_purchase_setting'])) {
+    if (isset($_POST['pwa_setting'])) {
+        update_option("pwa_app_name",validate_input($_POST['pwa_app_name']));
+        update_option("pwa_short_name",validate_input($_POST['pwa_short_name']));
+        update_option("pwa_bg_color",validate_input($_POST['pwa_bg_color']));
+        update_option("pwa_theme_color",validate_input($_POST['pwa_theme_color']));
+        update_option("pwa_app_description",validate_input($_POST['pwa_app_description']));
 
-        // Set API Key
-        $code = $_POST['purchase_key'];
-        $buyer_email = (isset($_POST['buyer_email']))? validate_input($_POST['buyer_email']) : "";
-        $installing_version = 'pro';
+        $status = "success";
+        $message = __("Saved Successfully");
 
-		$output = json_decode(file_get_contents('../data.json'), true);
+        $valid_formats = array("jpg", "jpeg", "png"); // Valid image formats
+        if (isset($_FILES['pwa_icon']) && $_FILES['pwa_icon']['tmp_name'] != "") {
+            $filename = stripslashes($_FILES['pwa_icon']['name']);
+            $ext = getExtension($filename);
+            $ext = strtolower($ext);
+            //File extension check
+            if (in_array($ext, $valid_formats)) {
+                $uploaddir = "../storage/logo/"; //Image upload directory
 
-        if ($output['success']) {
-            if(isset($config['quickad_secret_file']) && $config['quickad_secret_file'] != ""){
-                $fileName = $config['quickad_secret_file'];
-            }else{
-                $fileName = get_random_string();
+                $old_icon = get_option('pwa_icon');
+
+                $result = quick_file_upload('pwa_icon', $uploaddir);
+                //Moving file to uploads folder
+                if ($result['success']) {
+                    update_option("pwa_icon", $result['file_name']);
+                    resizeImage(512, $uploaddir . $result['file_name'], $uploaddir . $result['file_name']);
+                    resizeImage(256, $uploaddir . 'icon-256-'.$result['file_name'], $uploaddir . $result['file_name']);
+                    resizeImage(128, $uploaddir . 'icon-128-'.$result['file_name'], $uploaddir . $result['file_name']);
+
+                    $icon_path = $uploaddir . $old_icon;
+                    if (file_exists($icon_path) && !is_dir($icon_path)) {
+                        unlink($icon_path);
+                        unlink($uploaddir . 'icon-256-'.$old_icon);
+                        unlink($uploaddir . 'icon-128-'.$old_icon);
+                    }
+                } else {
+                    $status = "error";
+                    $message = __("Error: Please try again.");
+                }
+            } else {
+                $status = "error";
+                $message = __("Only allowed jpg, jpeg png");
             }
 
-            if(isset($config['quickad_user_secret_file']) && $config['quickad_user_secret_file'] != ""){
-                $userFileName = $config['quickad_user_secret_file'];
-            }else{
-                $userFileName = get_random_string();
-            }
-            file_put_contents( $fileName . '.php', $output['data']);
-            file_put_contents( '../php/'.$userFileName . '.php', $output['user_data']);
-            $success = true;
-            update_option("quickad_secret_file",$fileName);
-            update_option("quickad_user_secret_file",$userFileName);
-
-            update_option("purchase_key", $_POST['purchase_key']);
-            update_option("purchase_type", $output['purchase_type']);
-            $status = "success";
-            $message = __("Purchase code verified successfully");
-        } else {
-            $status = "error";
-            $message = $output['error'];
         }
-
     }
-
     echo $json = '{"status" : "' . $status . '","message" : "' . $message . '"}';
     die();
 }
