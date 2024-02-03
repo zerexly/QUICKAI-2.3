@@ -4,8 +4,10 @@ define("APPPATH", ROOTPATH."/php/");
 define("ADMINPATH", __DIR__);
 
 // Check site url
-$protocol = isset($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] && $_SERVER["HTTPS"] != "off"
-    ? "https://" : "http://";
+if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']))
+    $protocol = $_SERVER["HTTP_X_FORWARDED_PROTO"] == "https" ? "https://" : "http://";
+else
+    $protocol = !empty($_SERVER['HTTPS']) && $_SERVER["HTTPS"] != "off" ? "https://" : "http://";
 $admin_url = $protocol
     . $_SERVER["HTTP_HOST"]
     . (dirname($_SERVER["SCRIPT_NAME"]) == DIRECTORY_SEPARATOR ? "" : "/")
