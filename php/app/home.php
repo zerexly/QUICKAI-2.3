@@ -7,10 +7,13 @@ if(get_option('disable_landing_page')){
 }
 
 // get ai images
-$ai_images = ORM::for_table($config['db']['pre'] . 'ai_images')
-    ->order_by_desc('id')
-    ->limit(get_option('ai_images_home_limit', 18))
-    ->find_many();
+$ai_images = [];
+if(get_option("enable_ai_images")) {
+    $ai_images = ORM::for_table($config['db']['pre'] . 'ai_images')
+        ->order_by_desc('id')
+        ->limit(get_option('ai_images_home_limit', 18))
+        ->find_array();
+}
 
 // get recent blog
 $sql = "SELECT
@@ -60,6 +63,10 @@ foreach ($rows as $row) {
 $sub_info = get_user_membership_detail(isset($_SESSION['user']['id'])?$_SESSION['user']['id']:null);
 $sub_types = array();
 
+if(!isset($_SESSION['user']['id'])){
+    $sub_info['id'] = 0;
+}
+
 // custom settings
 $plan_custom = ORM::for_table($config['db']['pre'].'plan_options')
     ->where('active', 1)
@@ -76,7 +83,7 @@ if(!empty($plan_custom)) {
 $free_plan_templates = null;
 $plan = json_decode(get_option('free_membership_plan'), true);
 if($plan['status']){
-    if($plan['id'] == $sub_info['id']) {
+    if($plan['id'] === $sub_info['id']) {
         $sub_types[$plan['id']]['Selected'] = 1;
     } else {
         $sub_types[$plan['id']]['Selected'] = 0;
@@ -84,6 +91,12 @@ if($plan['status']){
 
     $sub_types[$plan['id']]['id'] = $plan['id'];
     $sub_types[$plan['id']]['title'] = $plan['name'];
+
+    /* hack to visible these plans */
+    $sub_types[$plan['id']]['monthly_price_number'] = 1;
+    $sub_types[$plan['id']]['annual_price_number'] = 1;
+    $sub_types[$plan['id']]['lifetime_price_number'] = 1;
+
     $sub_types[$plan['id']]['monthly_price'] = price_format(0,$config['currency_code']);
     $sub_types[$plan['id']]['annual_price'] = price_format(0,$config['currency_code']);
     $sub_types[$plan['id']]['lifetime_price'] = price_format(0,$config['currency_code']);
@@ -92,6 +105,7 @@ if($plan['status']){
 
     $sub_types[$plan['id']]['ai_model'] = $settings['ai_model'];
     $sub_types[$plan['id']]['ai_chat'] = $settings['ai_chat'];
+    $sub_types[$plan['id']]['ai_chatbots'] = !empty($settings['ai_chatbots']) ? $settings['ai_chatbots'] : [];
     $sub_types[$plan['id']]['ai_code'] = $settings['ai_code'];
     $sub_types[$plan['id']]['show_ads'] = $settings['show_ads'];
     $sub_types[$plan['id']]['live_chat'] = $settings['live_chat'];
@@ -101,6 +115,8 @@ if($plan['status']){
     $sub_types[$plan['id']]['ai_speech_to_text_limit'] = ($settings['ai_speech_to_text_limit'] == -1)? __("Unlimited"): $settings['ai_speech_to_text_limit'];
     $sub_types[$plan['id']]['ai_speech_to_text_file_limit'] = ($settings['ai_speech_to_text_file_limit'] == -1)? __("Unlimited"): $settings['ai_speech_to_text_file_limit'];
 
+    $sub_types[$plan['id']]['ai_text_to_speech_limit'] = ($settings['ai_text_to_speech_limit'] == -1)? __("Unlimited"): $settings['ai_text_to_speech_limit'];
+
     $sub_types[$plan['id']]['custom_settings'] = '';
     if(!empty($plan_custom)) {
         foreach ($plan_custom as $custom) {
@@ -114,11 +130,28 @@ if($plan['status']){
             }
         }
     }
+
+    /* get template names */
+    $ai_template_titles = ORM::for_table($config['db']['pre'].'ai_templates')
+        ->select_expr('1 as custom_group, GROUP_CONCAT(title) as titles')
+        ->where_raw('slug IN ("'.join('","', $settings['ai_templates']).'")')
+        ->order_by_asc('position')
+        ->group_by('custom_group')
+        ->find_one();
+    $sub_types[$plan['id']]['ai_template_titles'] = $ai_template_titles['titles'];
+
+    $ai_custom_template_titles = ORM::for_table($config['db']['pre'].'ai_custom_templates')
+        ->select_expr('1 as custom_group, GROUP_CONCAT(title) as titles')
+        ->where_raw('slug IN ("'.join('","', $settings['ai_templates']).'")')
+        ->order_by_asc('position')
+        ->group_by('custom_group')
+        ->find_one();
+    $sub_types[$plan['id']]['ai_template_titles'] .= ','.$ai_custom_template_titles['titles'];
 }
 
 $plan = json_decode(get_option('trial_membership_plan'), true);
 if($plan['status']){
-    if($plan['id'] == $sub_info['id']) {
+    if($plan['id'] === $sub_info['id']) {
         $sub_types[$plan['id']]['Selected'] = 1;
     } else {
         $sub_types[$plan['id']]['Selected'] = 0;
@@ -126,6 +159,12 @@ if($plan['status']){
 
     $sub_types[$plan['id']]['id'] = $plan['id'];
     $sub_types[$plan['id']]['title'] = $plan['name'];
+
+    /* hack to visible these plans */
+    $sub_types[$plan['id']]['monthly_price_number'] = 1;
+    $sub_types[$plan['id']]['annual_price_number'] = 1;
+    $sub_types[$plan['id']]['lifetime_price_number'] = 1;
+
     $sub_types[$plan['id']]['monthly_price'] = price_format(0,$config['currency_code']);
     $sub_types[$plan['id']]['annual_price'] = price_format(0,$config['currency_code']);
     $sub_types[$plan['id']]['lifetime_price'] = price_format(0,$config['currency_code']);
@@ -134,6 +173,7 @@ if($plan['status']){
 
     $sub_types[$plan['id']]['ai_model'] = $settings['ai_model'];
     $sub_types[$plan['id']]['ai_chat'] = $settings['ai_chat'];
+    $sub_types[$plan['id']]['ai_chatbots'] = !empty($settings['ai_chatbots']) ? $settings['ai_chatbots'] : [];
     $sub_types[$plan['id']]['ai_code'] = $settings['ai_code'];
     $sub_types[$plan['id']]['show_ads'] = $settings['show_ads'];
     $sub_types[$plan['id']]['live_chat'] = $settings['live_chat'];
@@ -143,6 +183,8 @@ if($plan['status']){
     $sub_types[$plan['id']]['ai_speech_to_text_limit'] = ($settings['ai_speech_to_text_limit'] == -1)? __("Unlimited"): $settings['ai_speech_to_text_limit'];
     $sub_types[$plan['id']]['ai_speech_to_text_file_limit'] = ($settings['ai_speech_to_text_file_limit'] == -1)? __("Unlimited"): $settings['ai_speech_to_text_file_limit'];
 
+    $sub_types[$plan['id']]['ai_text_to_speech_limit'] = ($settings['ai_text_to_speech_limit'] == -1)? __("Unlimited"): $settings['ai_text_to_speech_limit'];
+
     $sub_types[$plan['id']]['custom_settings'] = '';
     if(!empty($plan_custom)) {
         foreach ($plan_custom as $custom) {
@@ -156,12 +198,30 @@ if($plan['status']){
             }
         }
     }
+
+    /* get template names */
+    $ai_template_titles = ORM::for_table($config['db']['pre'].'ai_templates')
+        ->select_expr('1 as custom_group, GROUP_CONCAT(title) as titles')
+        ->where_raw('slug IN ("'.join('","', $settings['ai_templates']).'")')
+        ->order_by_asc('position')
+        ->group_by('custom_group')
+        ->find_one();
+    $sub_types[$plan['id']]['ai_template_titles'] = $ai_template_titles['titles'];
+
+    $ai_custom_template_titles = ORM::for_table($config['db']['pre'].'ai_custom_templates')
+        ->select_expr('1 as custom_group, GROUP_CONCAT(title) as titles')
+        ->where_raw('slug IN ("'.join('","', $settings['ai_templates']).'")')
+        ->order_by_asc('position')
+        ->group_by('custom_group')
+        ->find_one();
+    $sub_types[$plan['id']]['ai_template_titles'] .= ','.$ai_custom_template_titles['titles'];
 }
 
 $total_monthly = $total_annual = $total_lifetime = 0;
 
 $rows = ORM::for_table($config['db']['pre'].'plans')
     ->where('status', '1')
+    ->order_by_asc('position')
     ->find_many();
 
 foreach ($rows as $plan)
@@ -180,6 +240,10 @@ foreach ($rows as $plan)
     $total_annual += $plan['annual_price'];
     $total_lifetime += $plan['lifetime_price'];
 
+    $sub_types[$plan['id']]['monthly_price_number'] = $plan['monthly_price'];
+    $sub_types[$plan['id']]['annual_price_number'] = $plan['annual_price'];
+    $sub_types[$plan['id']]['lifetime_price_number'] = $plan['lifetime_price'];
+
     $sub_types[$plan['id']]['monthly_price'] = price_format($plan['monthly_price'],$config['currency_code']);
     $sub_types[$plan['id']]['annual_price'] = price_format($plan['annual_price'],$config['currency_code']);
     $sub_types[$plan['id']]['lifetime_price'] = price_format($plan['lifetime_price'],$config['currency_code']);
@@ -188,6 +252,7 @@ foreach ($rows as $plan)
 
     $sub_types[$plan['id']]['ai_model'] = $settings['ai_model'];
     $sub_types[$plan['id']]['ai_chat'] = $settings['ai_chat'];
+    $sub_types[$plan['id']]['ai_chatbots'] = !empty($settings['ai_chatbots']) ? $settings['ai_chatbots'] : [];
     $sub_types[$plan['id']]['ai_code'] = $settings['ai_code'];
     $sub_types[$plan['id']]['show_ads'] = $settings['show_ads'];
     $sub_types[$plan['id']]['live_chat'] = $settings['live_chat'];
@@ -196,6 +261,7 @@ foreach ($rows as $plan)
     $sub_types[$plan['id']]['ai_images_limit'] = ($settings['ai_images_limit'] == -1)? __("Unlimited"): $settings['ai_images_limit'];
     $sub_types[$plan['id']]['ai_speech_to_text_limit'] = ($settings['ai_speech_to_text_limit'] == -1)? __("Unlimited"): $settings['ai_speech_to_text_limit'];
     $sub_types[$plan['id']]['ai_speech_to_text_file_limit'] = ($settings['ai_speech_to_text_file_limit'] == -1)? __("Unlimited"): $settings['ai_speech_to_text_file_limit'];
+    $sub_types[$plan['id']]['ai_text_to_speech_limit'] = ($settings['ai_text_to_speech_limit'] == -1)? __("Unlimited"): $settings['ai_text_to_speech_limit'];
 
     $sub_types[$plan['id']]['custom_settings'] = '';
     if(!empty($plan_custom)) {
@@ -210,6 +276,42 @@ foreach ($rows as $plan)
             }
         }
     }
+
+    /* get template names */
+    $ai_template_titles = ORM::for_table($config['db']['pre'].'ai_templates')
+        ->select_expr('1 as custom_group, GROUP_CONCAT(title) as titles')
+        ->where_raw('slug IN ("'.join('","', $settings['ai_templates']).'")')
+        ->order_by_asc('position')
+        ->group_by('custom_group')
+        ->find_one();
+    $sub_types[$plan['id']]['ai_template_titles'] = $ai_template_titles['titles'];
+
+    $ai_custom_template_titles = ORM::for_table($config['db']['pre'].'ai_custom_templates')
+        ->select_expr('1 as custom_group, GROUP_CONCAT(title) as titles')
+        ->where_raw('slug IN ("'.join('","', $settings['ai_templates']).'")')
+        ->order_by_asc('position')
+        ->group_by('custom_group')
+        ->find_one();
+    $sub_types[$plan['id']]['ai_template_titles'] .= ','.$ai_custom_template_titles['titles'];
+}
+
+$rows = ORM::for_table($config['db']['pre'].'prepaid_plans')
+    ->where('status', '1')
+    ->order_by_asc('position')
+    ->find_many();
+$prepaid_plans = array();
+foreach ($rows as $plan)
+{
+    $prepaid_plans[$plan['id']]['id'] = $plan['id'];
+    $prepaid_plans[$plan['id']]['title'] = $plan['name'];
+    $prepaid_plans[$plan['id']]['recommended'] = $plan['recommended'];
+    $prepaid_plans[$plan['id']]['price'] = price_format($plan['price'],$config['currency_code']);
+
+    $settings = json_decode($plan['settings'], true);
+    $prepaid_plans[$plan['id']]['ai_words_limit'] = $settings['ai_words_limit'];
+    $prepaid_plans[$plan['id']]['ai_images_limit'] = $settings['ai_images_limit'];
+    $prepaid_plans[$plan['id']]['ai_speech_to_text_limit'] = $settings['ai_speech_to_text_limit'];
+    $prepaid_plans[$plan['id']]['ai_text_to_speech_limit'] = $settings['ai_text_to_speech_limit'];
 }
 
 $currency_data = get_currency_by_code(get_option('currency_code'));
@@ -221,9 +323,44 @@ if((time()-$cron_exec_time) > $cron_time) {
     run_cron_job();
 }
 
+$ai_templates = [];
+if(get_option("enable_ai_templates", 1)) {
+    $ai_templates = get_ai_templates();
+    if(get_option('hide_plan_disabled_features')){
+        $plan_templates = $sub_info['settings']['ai_templates'];
+        foreach ($ai_templates as &$category){
+            $cat_templates = array();
+            foreach ($category['templates'] as $template) {
+                if (in_array($template['slug'], $plan_templates)) {
+                    $cat_templates[] = $template;
+                }
+            }
+            $category['templates'] = $cat_templates;
+        }
+    }
+}
+
+// faq
+$faq = array();
+$rows = ORM::for_table($config['db']['pre'].'faq_entries')
+    ->select_many('faq_id','faq_title','faq_content')
+    ->where(array(
+        'translation_lang' => $config['lang_code'],
+        'active' => 1
+    ))
+    ->order_by_asc('faq_id')
+    ->find_many();
+
+foreach ($rows as $info)
+{
+    $faq[$info['faq_id']]['id'] = $info['faq_id'];
+    $faq[$info['faq_id']]['title'] = stripslashes($info['faq_title']);
+    $faq[$info['faq_id']]['content'] = stripslashes($info['faq_content']);
+}
+
 //Print Template 'Home/index Page'
 HtmlTemplate::display('index', array(
-    'ai_templates' => get_ai_templates(),
+    'ai_templates' => $ai_templates,
     'ai_images' => $ai_images,
     'plan_templates' => $free_plan_templates,
     'currency_sign' => $currency_data['html_entity'],
@@ -233,5 +370,7 @@ HtmlTemplate::display('index', array(
     'sub_types' => $sub_types,
     'total_monthly' => $total_monthly,
     'total_annual' => $total_annual,
-    'total_lifetime' => $total_lifetime
+    'total_lifetime' => $total_lifetime,
+    'prepaid_plans' => $prepaid_plans,
+    'faq' => $faq,
 ));

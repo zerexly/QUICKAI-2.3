@@ -9,7 +9,7 @@ overall_header(__("404 - Page Not Found"));
             <div class="col-xl-12">
 
                 <section id="not-found" class="center margin-top-50 margin-bottom-25">
-                    <h2><?php _e('404') ;?> <i class="fa ti-face-sad"></i></h2>
+                    <h2>404 <i class="fa ti-face-sad"></i></h2>
                     <p><?php _e("We're sorry, but the page you were looking for doesn't exist") ;?></p>
                 </section>
                 <div class="row">

@@ -30,7 +30,7 @@ function change_config_file_settings($filePath, $newSettings, $lang)
 {
     // Update $fileSettings with any new values
     $fileSettings = array_merge($lang, $newSettings);
-    ksort($fileSettings);
+    //ksort($fileSettings);
     // Build the new file as a string
     $newFileStr = "<?php\n";
     foreach ($fileSettings as $name => $val) {

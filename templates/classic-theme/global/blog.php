@@ -71,7 +71,7 @@ overall_header($title);
                                 <nav class="pagination">
                                     <ul>
                                         <?php
-                                        foreach($pages as $page) {
+                                        foreach($pagging as $page) {
                                             if ($page['current'] == 0){
                                                 ?>
                                                 <li><a href="<?php _esc($page['link'])?>"><?php _esc($page['title'])?></a></li>
@@ -163,7 +163,7 @@ overall_header($title);
                     <?php } ?>
 
                     <!-- Tags Widget -->
-                    <div class="sidebar-widget">
+                    <div class="sidebar-widget blog-tag-widget">
                         <h3><?php _e("Tags") ?></h3>
                         <div class="task-tags">
                             <?php _esc($all_tags) ?>

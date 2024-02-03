@@ -2,7 +2,9 @@
 
 class StableDiffusion
 {
-    private string $engine = "stable-diffusion-512-v2-1";
+    //stable-diffusion-512-v2-1
+    //stable-diffusion-xl-beta-v2-2-2
+    private string $engine = "stable-diffusion-xl-1024-v0-9";
     private array $headers;
     private array $contentTypes;
     private int $timeout = 0;
@@ -41,11 +43,34 @@ class StableDiffusion
     }
 
     /**
+     * @param $opts
+     * @return bool|string
+     */
+    public function imageVariation($opts)
+    {
+        $url = self::BASE_URL . $this->engine . '/image-to-image';
+
+        return $this->sendRequest($url, 'POST', $opts);
+    }
+
+    /**
      * @return bool|string
      */
     public function listEngines()
     {
         $url = 'https://api.stability.ai/v1/engines/list';
+
+        return $this->sendRequest($url, 'GET');
+    }
+
+    /**
+     * Get balance
+     *
+     * @return bool|string
+     */
+    public function balance()
+    {
+        $url = 'https://api.stability.ai/v1/user/balance';
 
         return $this->sendRequest($url, 'GET');
     }
@@ -79,7 +104,7 @@ class StableDiffusion
     {
         $post_fields = json_encode($opts);
 
-        if (array_key_exists('file', $opts) || array_key_exists('image', $opts)) {
+        if (array_key_exists('file', $opts) || array_key_exists('init_image', $opts)) {
             $this->headers[0] = $this->contentTypes["multipart/form-data"];
             $post_fields      = $opts;
         } else {

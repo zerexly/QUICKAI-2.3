@@ -1,7 +1,7 @@
 <?php
-if(checkloggedin())
+if(isset($current_user['id']))
 {
-    $ses_userdata = get_user_data($_SESSION['user']['username']);
+    $ses_userdata = $current_user;
 
     $author_image = $ses_userdata['image'];
     $author_lastactive = $ses_userdata['lastactive'];
@@ -10,10 +10,17 @@ if(checkloggedin())
     $username_error = '';
     $email_error = '';
     $password_error = '';
+    $delete_account_error = '';
     $avatarName = null;
 
     if(isset($_POST['submit']))
     {
+        if(!check_allow()){
+            $errors++;
+            $username_error = 'Disabled on demo';
+            $username_error = "<span class='status-not-available'> ".$username_error."</span>";
+        }
+
         // Check if this is an Username availability check from signup page using ajax
         if($_POST["username"] != $_SESSION['user']['username'])
         {
@@ -29,10 +36,10 @@ if(checkloggedin())
                 $username_error = __("Username may only contain alphanumeric characters");
                 $username_error = "<span class='status-not-available'> ".$username_error." [A-Z,a-z,0-9]</span>";
             }
-            elseif( (strlen($_POST['username']) < 4) OR (strlen($_POST['username']) > 16) )
+            elseif( (mb_strlen($_POST['username']) < 2) OR (mb_strlen($_POST['username']) > 16) )
             {
                 $errors++;
-                $username_error = __("Username must be between 4 and 15 characters long");
+                $username_error = __("Username must be between 2 and 15 characters long");
                 $username_error = "<span class='status-not-available'> ".$username_error.".</span>";
             }
             else{
@@ -53,9 +60,8 @@ if(checkloggedin())
         }
         elseif($_POST["email"] != $ses_userdata['email'])
         {
-            $regex = '/^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$/';
 
-            if (!preg_match($regex, $_POST['email'])) {
+            if (!filter_var($_POST["email"], FILTER_VALIDATE_EMAIL)) {
                 $errors++;
                 $email_error = __("This is not a valid email address");
                 $email_error = "<span class='status-not-available'> " . $email_error . ".</span>";
@@ -72,7 +78,7 @@ if(checkloggedin())
         // Check if this is an Password availability check from signup page using ajax
         if(!empty($_POST["password"]) && !empty($_POST["re_password"]))
         {
-            if( (strlen($_POST['password']) < 5) OR (strlen($_POST['password']) > 21) )
+            if( (mb_strlen($_POST['password']) < 5) OR (mb_strlen($_POST['password']) > 21) )
             {
                 $errors++;
                 $password_error = __("Password must be between 4 and 20 characters long");
@@ -114,7 +120,7 @@ if(checkloggedin())
                         }
                     } else {
                         $errors++;
-                        $avatar_error = __("Only allowed jpg, jpeg png");
+                        $avatar_error = __("Only jpg, jpeg & png allowed.");
                         $avatar_error = "<span class='status-not-available'>" . $avatar_error . "</span>";
                     }
                 }
@@ -144,7 +150,9 @@ if(checkloggedin())
             if ($avatarName) {
                 $person->set('image', $avatarName);
             }
+
             $person->save();
+
 
             //Updating Session Values
             $loggedin = get_user_data("",$_SESSION['user']['id']);
@@ -195,6 +203,108 @@ if(checkloggedin())
         $password_error = '';
     }
 
+    if(isset($_POST['delete-account'])) {
+        if (!check_allow()) {
+            $errors++;
+            $username_error = 'Disabled on demo';
+            $username_error = "<span class='status-not-available'> " . $username_error . "</span>";
+        }
+
+        $info = ORM::for_table($config['db']['pre'] . 'user')
+            ->select_many('password_hash')
+            ->where('id', $_SESSION['user']['id'])
+            ->find_one();
+        if (password_verify($_POST['password'], $info['password_hash'])) {
+
+            /* Cancel subscription if there is any */
+            cancel_recurring_payment($_SESSION['user']['id']);
+
+            $users = ORM::for_table($config['db']['pre'].'user')
+                ->select('image')
+                ->where("id", $_SESSION['user']['id']);
+
+            foreach ($users->find_array() as $row) {
+                $uploaddir = ROOTPATH."/storage/profile/";
+                // delete images
+                if (trim($row['image']) != "" && $row['image'] != "default_user.png") {
+                    $file = $uploaddir . $row['image'];
+                    if (file_exists($file))
+                        unlink($file);
+                }
+            }
+
+            // delete documents of user
+            ORM::for_table($config['db']['pre'] . 'ai_documents')
+                ->where("id", $_SESSION['user']['id'])
+                ->delete_many();
+            ORM::for_table($config['db']['pre'] . 'word_used')
+                ->where("id", $_SESSION['user']['id'])
+                ->delete_many();
+
+            // delete images of user
+            $images = ORM::for_table($config['db']['pre'] . 'ai_images')
+                ->select('image')
+                ->where("id", $_SESSION['user']['id']);
+            foreach ($images->find_array() as $row) {
+                $image_dir = "../storage/ai_images/";
+                $main_image = trim((string) $row['image']);
+                // delete Image
+                if (!empty($main_image)) {
+                    $file = $image_dir . $main_image;
+                    if (file_exists($file))
+                        unlink($file);
+
+                    $file = $image_dir . 'small_'.$main_image;
+                    if (file_exists($file))
+                        unlink($file);
+                }
+            }
+            $images->delete_many();
+            ORM::for_table($config['db']['pre'] . 'image_used')
+                ->where("id", $_SESSION['user']['id'])
+                ->delete_many();
+
+            // delete audios of user
+            $speeches = ORM::for_table($config['db']['pre'] . 'ai_speeches')
+                ->select('file_name')
+                ->where("id", $_SESSION['user']['id']);
+            foreach ($speeches->find_array() as $row) {
+                $dir = ROOTPATH."/storage/ai_audios/";
+                $main_file = $row['file_name'];
+
+                if (trim($main_file) != "") {
+                    $file = $dir . $main_file;
+                    if (file_exists($file))
+                        unlink($file);
+                }
+            }
+            $speeches->delete_many();
+            ORM::for_table($config['db']['pre'] . 'text_to_speech_used')
+                ->where("id", $_SESSION['user']['id'])
+                ->delete_many();
+
+            // delete speech_to_text_used of user
+            ORM::for_table($config['db']['pre'] . 'speech_to_text_used')
+                ->where("id", $_SESSION['user']['id'])
+                ->delete_many();
+
+            // Delete Users
+            $users->delete_many();
+
+            transfer($link['LOGOUT'],__("Account Deleted Successfully"),__("Account Deleted"));
+            exit;
+        } else {
+            $errors++;
+            $delete_account_error = __('Your current password is not valid.');
+            $delete_account_error = "<span class='status-not-available'> " . $delete_account_error . "</span>";
+        }
+    }
+
+    $billing_country = get_user_option($_SESSION['user']['id'],'billing_country');
+    if(empty($billing_country)){
+        $billing_country = strtoupper(check_user_country());
+    }
+
     //Print Template
     HtmlTemplate::display('global/account-setting', array(
         'email_field' => $email_field,
@@ -202,6 +312,7 @@ if(checkloggedin())
         'username_error' => $username_error,
         'email_error' => $email_error,
         'password_error' => $password_error,
+        'delete_account_error' => $delete_account_error,
         'billing_error' => $billing_error,
         'billing_details_type' => get_user_option($_SESSION['user']['id'],'billing_details_type'),
         'billing_tax_id' => get_user_option($_SESSION['user']['id'],'billing_tax_id'),
@@ -210,8 +321,8 @@ if(checkloggedin())
         'billing_city' => get_user_option($_SESSION['user']['id'],'billing_city'),
         'billing_state' => get_user_option($_SESSION['user']['id'],'billing_state'),
         'billing_zipcode' => get_user_option($_SESSION['user']['id'],'billing_zipcode'),
-        'billing_country' => get_user_option($_SESSION['user']['id'],'billing_country'),
-        'countries' => get_country_list(get_user_option($_SESSION['user']['id'],'billing_country'),"selected",0),
+        'billing_country' => $billing_country,
+        'countries' => get_country_list($billing_country,"selected",0),
         'authoruname' => ucfirst($ses_userdata['username']),
         'authorname' => ucfirst($ses_userdata['name']),
         'authorimg' => $author_image,
