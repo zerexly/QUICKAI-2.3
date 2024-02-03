@@ -30,11 +30,7 @@
                     </div>
                     <div class="submit-field">
                         <h5><?php _e("Email Address") ?></h5>
-                        <input type="text" class="with-border" name="email" required="">
-                    </div>
-                    <div class="submit-field">
-                        <h5><?php _e("Phone Number") ?></h5>
-                        <input type="text" class="with-border" name="phone" required="">
+                        <input type="email" class="with-border" name="email" required="">
                     </div>
                     <div class="submit-field">
                         <h5><?php _e("Subject") ?></h5>

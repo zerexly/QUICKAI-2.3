@@ -23,7 +23,7 @@ overall_header(__("AI Chat"));
                                 _esc(number_format((float)$total_words_used), 0) . '</i> / ' .
                                 ($words_limit == -1
                                     ? __('Unlimited')
-                                    : _esc(number_format($words_limit), 0));
+                                    : _esc(number_format($words_limit + get_user_option($_SESSION['user']['id'], 'total_words_available', 0)), 0));
                             ?>
                             <strong><?php _e('Words Used'); ?></strong>
                         </div>
@@ -36,30 +36,78 @@ overall_header(__("AI Chat"));
                         </ul>
                     </nav>
                 </div>
-                <?php if ($membership_ai_chat) { ?>
+                <?php if ($membership_ai_chat && ($bot_id == null || in_array($bot_id, $membership_ai_chatbots))) { ?>
                     <div class="notification notice">
                         <?php _e("Here you can chat with the AI. Ask your questions or just have fun.") ?>
                     </div>
                 <?php } else { ?>
                     <div class="notification small-notification error">
-                        <?php _e("You can not use the chat feature with your OpenAI model. Upgrade your membership plan to use this feature.") ?>
+                        <?php _e("Upgrade your membership plan to use this feature.") ?>
                     </div>
                 <?php } ?>
 
                 <div class="messages-container margin-top-0">
                     <div class="messages-container-inner">
+                        <!-- Messages -->
+                        <div class="messages-inbox">
+                            <div class="messages-headline">
+                                <div class="input-with-icon">
+                                    <input id="conversation-search" type="text" placeholder="Search">
+                                    <i class="icon-material-outline-search"></i>
+                                </div>
+                            </div>
+                            <ul id="conversations-wrapper">
+                                <?php foreach ($conversations as $conversation) { ?>
+                                    <li>
+                                        <a href="javascript:void(0)"
+                                           class="conversation"
+                                           data-id="<?php _esc($conversation['id']) ?>">
+                                            <div class="message-by margin-left-0">
+                                                <div class="message-by-headline">
+                                                    <h5><?php _esc($conversation['title']) ?></h5>
+                                                    <input class="conversation-title with-border small-input"
+                                                           type="text"
+                                                           value="<?php _esc(escape($conversation['title'])) ?>">
+                                                    <span class="conversation-time"><?php _esc(timeAgo($conversation['updated_at'])) ?></span>
+                                                    <span class="conversation-edit"><i
+                                                                class="icon-feather-edit"></i> <?php _e('Edit') ?></span>
+                                                </div>
+                                                <p class="conversation-msg"><?php _esc(strlimiter($conversation['last_message'], 100)) ?></p>
+                                            </div>
+                                        </a>
+                                    </li>
+                                <?php } ?>
+                            </ul>
+                            <div class="messages-inbox-bottom">
+                                <a href="javascript:void(0)" id="new-conversation"
+                                   class="button full-width button-sliding-icon"><?php _e('New Conversation'); ?> <i
+                                            class="icon-feather-plus"></i></a>
+                            </div>
+                        </div>
+                        <!-- Messages / End -->
                         <!-- Message Content -->
                         <div class="message-content">
                             <div class="messages-headline">
-                                <h4><div class="user-avatar margin-right-10">
-                                        <img src="<?php _esc($config['site_url']); ?>storage/profile/<?php _esc($ai_chat_bot_avatar) ?>" alt="<?php _esc($ai_chat_bot_name) ?>" width="25"/>
+                                <h4 class="d-flex align-items-center">
+                                    <div class="user-avatar margin-right-10">
+                                        <img src="<?php _esc($ai_chat_bot_avatar) ?>"
+                                             alt="<?php _esc($ai_chat_bot_name) ?>" width="25"/>
                                     </div>
-                                    <?php _esc($ai_chat_bot_name) ?></h4>
+                                    <div class="line-height-1">
+                                        <span><?php _esc($ai_chat_bot_name) ?></span>
+                                        <?php if ($bot_role) { ?>
+                                            <br>
+                                            <div class="margin-top-3"><small><?php _esc($bot_role) ?></small></div>
+                                        <?php } ?>
+                                    </div>
+                                </h4>
                                 <div class="message-action">
+                                    <a href="#" class="button ripple-effect btn-sm d-md-none d-inline-block"
+                                       id="show-conversations" title="<?php _e("Show Conversations") ?>"
+                                       data-tippy-placement="top"><i class="icon-feather-menu"></i></a>
                                     <a href="#" class="button ripple-effect btn-sm" id="export-chats"
                                        title="<?php _e("Export Conversation") ?>"
                                        data-tippy-placement="top"><i class="icon-feather-download"></i></a>
-
                                     <a href="#" class="button ripple-effect btn-sm red" id="delete-chats"
                                        title="<?php _e("Delete Conversation") ?>"
                                        data-tippy-placement="top"><i class="icon-feather-trash-2"></i></a>
@@ -68,57 +116,48 @@ overall_header(__("AI Chat"));
 
                             <!-- Message Content Inner -->
                             <div class="message-content-inner">
-                                <?php
-                                $last_time = null;
-                                foreach ($chats as $chat) {
-
-                                    if ($last_time) {
-                                        $date1 = new DateTime($last_time);
-                                    } else {
-                                        $date1 = new DateTime();
-                                    }
-                                    $date2 = new DateTime($chat['date']);
-                                    $interval = $date1->diff($date2);
-                                    if ($interval->d) { ?>
-                                        <!-- Time Sign -->
-                                        <div class="message-time-sign">
-                                            <span><?php _esc($date2->format('F d, Y')) ?></span>
-                                        </div>
-                                    <?php }
-
-                                    $last_time = $chat['date'];
-                                    ?>
-                                    <div class="message-bubble me">
+                                <?php if ($bot_welcome_msg) { ?>
+                                    <div class="message-bubble">
                                         <div class="message-bubble-inner">
                                             <div class="message-avatar">
-                                                <img src="<?php _esc($config['site_url']); ?>storage/profile/<?php _esc($userpic) ?>" alt="<?php _esc($username) ?>"/>
+                                                <img src="<?php _esc($ai_chat_bot_avatar) ?>"
+                                                     alt="<?php _esc($ai_chat_bot_name) ?>"/>
                                             </div>
-                                            <div class="message-text"><p><?php _esc(nl2br(escape($chat['user_message']))) ?></p></div>
+                                            <div class="message-text">
+                                                <p><?php _esc($bot_welcome_msg) ?></p>
+                                            </div>
                                         </div>
                                         <div class="clearfix"></div>
                                     </div>
-                                    <?php if (!empty($chat['ai_message'])) { ?>
-                                        <div class="message-bubble">
-                                            <div class="message-bubble-inner">
-                                                <div class="message-avatar">
-                                                    <img src="<?php _esc($config['site_url']); ?>storage/profile/<?php _esc($ai_chat_bot_avatar) ?>" alt="<?php _esc($ai_chat_bot_name) ?>"/>
-                                                </div>
-                                                <div class="message-text"><p><?php _esc(nl2br(escape($chat['ai_message']))) ?></p>
-                                                </div>
-                                            </div>
-                                            <div class="clearfix"></div>
-                                        </div>
-                                    <?php }
-                                } ?>
+                                <?php } ?>
+                                <div id="dynamic-messages">
+                                </div>
+                                <div id="conversation-loader" class="button-progress"></div>
                             </div>
                             <!-- Message Content Inner / End -->
 
                             <!-- Reply Area -->
                             <form id="ai-chat-form">
                                 <div class="message-reply">
-                                    <input type="text" placeholder="<?php _e('Type your message here...') ?>" id="ai-chat-textarea">
-                                    <button id="chat-send-button" type="submit"
-                                            class="button ripple-effect"><?php _e('Send') ?></button>
+                                    <input type="hidden" name="bot_id" id="bot_id" value="<?php _esc($bot_id) ?>">
+                                    <textarea
+                                            placeholder="<?php _e('Type your message here (Use shift + Enter to send)') ?>"
+                                            id="ai-chat-textarea" rows="2"></textarea>
+                                    <div>
+                                        <?php if (get_option("enable_ai_chat_prompts", 1)) { ?>
+                                            <a id="chat-prompts" href="javascript:void(0)"
+                                               title="<?php _e('Prompt Library'); ?>" data-tippy-placement="top"><i
+                                                        class="fa fa-book"></i></a>
+                                        <?php } ?>
+                                        <?php if (get_option("enable_ai_chat_mic", 1)) { ?>
+                                            <a id="chat-microphone" href="javascript:void(0)"><i
+                                                        class="fa fa-microphone"></i></a>
+                                        <?php } ?>
+                                        <button id="chat-send-button" type="submit"
+                                                class="button ripple-effect">
+                                            <?php _e('Send') ?>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="form-error message-reply padding-top-10 padding-bottom-10"></div>
                             </form>
@@ -158,13 +197,68 @@ overall_header(__("AI Chat"));
         </div>
     </div>
 <?php ob_start() ?>
+<?php if (get_option("enable_ai_chat_prompts", 1)) { ?>
+    <!-- Prompt library -->
+    <div id="prompt-library-popup" class="zoom-anim-dialog mfp-hide dialog-with-tabs">
+        <!--Tabs -->
+        <div class="sign-in-form">
+            <ul class="popup-tabs-nav">
+                <li><a><?php _e('Prompt Library'); ?></a></li>
+            </ul>
+
+            <div class="popup-tabs-container">
+                <!-- Tab -->
+                <div class="popup-tab-content">
+                    <input id="prompt-search" type="search" placeholder="<?php _e('Search Prompts') ?>"
+                           class="with-border">
+                    <div id="chat-prompts-list">
+                        <?php foreach ($chat_prompts as $chat_prompt) {
+                            $translations = json_decode((string) $chat_prompt['translations'], true);
+                            $description = !empty($translations[$config['lang_code']]['description'])
+                                ? $translations[$config['lang_code']]['description']
+                                : $chat_prompt['description'];
+                            ?>
+                            <a href="javascript:void(0)"
+                               data-search-key="<?php _esc(escape($chat_prompt['prompt'] . ' ' . $description)) ?>"
+                               data-prompt="<?php _esc(escape($chat_prompt['prompt'])) ?>">
+                                <div class="dashboard-box ai-templates">
+                                    <div class="content">
+                                        <h4>
+                                            <?php _esc(!empty($translations[$config['lang_code']]['title'])
+                                                ? $translations[$config['lang_code']]['title']
+                                                : $chat_prompt['title']) ?>
+                                        </h4>
+                                        <p class="margin-bottom-0"><?php _esc($description) ?></p>
+                                    </div>
+                                </div>
+                            </a>
+                        <?php } ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+<?php } ?>
+
     <script>
-        const BOT_IMG = "<?php _esc($config['site_url']);?>storage/profile/<?php _esc($ai_chat_bot_avatar)?>";
+        const BOT_IMG = "<?php _esc($ai_chat_bot_avatar)?>";
         const PERSON_IMG = "<?php _esc($config['site_url']);?>storage/profile/<?php _esc($userpic)?>";
         const BOT_NAME = "<?php _esc($ai_chat_bot_name) ?>";
         const PERSON_NAME = "<?php _esc($username) ?>";
+
+        const LANG_COPY = "<?php _e('Copy') ?>";
+        const LANG_NEW_CONVERSATION = "<?php _e('New Conversation') ?>";
+
+        const ENABLE_ENTER_TO_SEND = <?php _esc(get_option("enable_ai_chat_enter_send",0)); ?>;
     </script>
-    <script src="<?php _esc(TEMPLATE_URL); ?>/js/ai-chat.js"></script>
+
+    <link href="<?php _esc(TEMPLATE_URL); ?>/css/markdown.css" rel="stylesheet">
+
+    <link href="<?php _esc(TEMPLATE_URL); ?>/css/highlight.dark.min.css" rel="stylesheet">
+    <script src="<?php _esc(TEMPLATE_URL); ?>/js/highlight.min.js"></script>
+    <script src="<?php _esc(TEMPLATE_URL); ?>/js/showdown.min.js"></script>
+
+    <script src="<?php _esc(TEMPLATE_URL); ?>/js/ai-chat.js?ver=<?php _esc($config['version']); ?>"></script>
 <?php
 $footer_content = ob_get_clean();
 include_once TEMPLATE_PATH . '/overall_footer_dashboard.php';

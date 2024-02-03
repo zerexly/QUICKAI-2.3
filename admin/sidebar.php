@@ -28,6 +28,27 @@
                     <i class="icon-feather-image"></i><span><?php _e('AI Images') ?></span>
                 </a>
             </li>
+            <li data-page="ai-speeches">
+                <a class="bar-icons" href="<?php echo ADMINURL; ?>app/ai-speeches.php">
+                    <i class="icon-feather-volume-2"></i><span><?php _e('AI Speeches') ?></span>
+                </a>
+            </li>
+            <li data-page="ai-chat-bots">
+                <a class="bar-icons" href="<?php echo ADMINURL; ?>app/ai-chat-bots.php">
+                    <svg class="svg-inline--fa fa-w-20 fa-fw fa-sm" aria-hidden="true" focusable="false" width="24px" height="24px" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M21.928 11.607c-.202-.488-.635-.605-.928-.633V8c0-1.103-.897-2-2-2h-6V4.61c.305-.274.5-.668.5-1.11a1.5 1.5 0 0 0-3 0c0 .442.195.836.5 1.11V6H5c-1.103 0-2 .897-2 2v2.997l-.082.006A1 1 0 0 0 1.99 12v2a1 1 0 0 0 1 1H3v5c0 1.103.897 2 2 2h14c1.103 0 2-.897 2-2v-5a1 1 0 0 0 1-1v-1.938a1.006 1.006 0 0 0-.072-.455zM5 20V8h14l.001 3.996L19 12v2l.001.005.001 5.995H5z"/><ellipse cx="8.5" cy="12" rx="1.5" ry="2"/><ellipse cx="15.5" cy="12" rx="1.5" ry="2"/><path d="M8 16h8v2H8z"/></svg>
+                    <span><?php _e('AI Chat Bots') ?></span>
+                </a>
+                <ul class="iconbar-mainmenu custom-scrollbar">
+                    <li class="iconbar-header"><?php _e('AI Chat Bots') ?></li>
+                    <li><a href="<?php echo ADMINURL; ?>app/ai-chat-bots.php" data-page="ai-chat-bots"><?php _e('AI Chat Bots') ?></a></li>
+                    <li><a href="<?php echo ADMINURL; ?>app/ai-chat-bots-categories.php" data-page="ai-chat-bots-categories"><?php _e('Categories') ?></a></li>
+                </ul>
+            </li>
+            <li data-page="ai-chat-prompts">
+                <a class="bar-icons" href="<?php echo ADMINURL; ?>app/ai-chat-prompts.php">
+                    <i class="icon-feather-align-center"></i><span><?php _e('AI Chat Prompts') ?></span>
+                </a>
+            </li>
             <li data-page="membership">
                 <a class="bar-icons" href="<?php echo ADMINURL; ?>global/membership_plan.php">
                     <i class="icon-feather-gift"></i><span><?php _e('Membership') ?></span>
@@ -40,6 +61,11 @@
                     <li><a href="<?php echo ADMINURL; ?>global/cron_logs.php" data-page="cron-logs"><?php _e('Cron Logs') ?></a></li>
                     <li><a href="<?php echo ADMINURL; ?>global/taxes.php" data-page="taxes"><?php _e('Taxes') ?></a></li>
                 </ul>
+            </li>
+            <li data-page="prepaid-plans">
+                <a class="bar-icons" href="<?php echo ADMINURL; ?>app/prepaid-plans.php">
+                    <i class="icon-feather-archive"></i><span><?php _e('Prepaid Plans') ?></span>
+                </a>
             </li>
             <li data-page="payment-methods">
                 <a class="bar-icons" href="<?php echo ADMINURL; ?>global/payment_methods.php">
@@ -171,6 +197,9 @@
                     </li>
                     <li>
                         <a href="#quick_social_login_setting" data-toggle="tab"><?php _e('Social Login Setting') ?></a>
+                    </li>
+                    <li>
+                        <a href="#quick_pwa" data-toggle="tab"><?php _e('PWA') ?></a>
                     </li>
                     <li>
                         <a href="#quick_recaptcha" data-toggle="tab"><?php _e('Google reCAPTCHA') ?></a>
