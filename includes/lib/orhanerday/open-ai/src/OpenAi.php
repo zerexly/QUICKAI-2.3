@@ -30,6 +30,7 @@ class OpenAi
         ];
 
         // setup proxy
+        /* quickai custom */
         if($proxy = get_api_proxy()){
             $this->setProxy($proxy);
         }
@@ -430,6 +431,32 @@ class OpenAi
         $this->baseUrl($url);
 
         return $this->sendRequest($url, 'POST', $opts);
+    }
+
+    /**
+     * Get used amount (quickai)
+     *
+     * @return bool|string
+     */
+    public function used_balance()
+    {
+        $url = Url::usedBalance();
+        $this->baseUrl($url);
+
+        return $this->sendRequest($url, 'GET');
+    }
+
+    /**
+     * Get hard limit (quickai)
+     *
+     * @return bool|string
+     */
+    public function balance_hard_limit()
+    {
+        $url = Url::balanceHardLimit();
+        $this->baseUrl($url);
+
+        return $this->sendRequest($url, 'GET');
     }
 
     /**
