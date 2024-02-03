@@ -1,14 +1,13 @@
 <?php
 /**
- * @author Sahil
- * @package QuickAI - OpenAI Content & Image Generator
- * @Copyright (c) 2015-23 Sahil.com
+ * @author sahilarun & zerexly
  */
 
 // Path to root directory of app.
 define("ROOTPATH", dirname(__FILE__));
 // Path to app folder.
 define("APPPATH", ROOTPATH."/php/");
+
 
 // Check if SSL enabled
 if(!empty($_SERVER['HTTP_X_FORWARDED_PROTO']))
@@ -62,7 +61,6 @@ if(file_exists(ROOTPATH . '/includes/lang/lang_'.$config['lang'].'.php')){
     require_once ROOTPATH . '/includes/lang/lang_english.php';
 }
 
-run_cron_job();
 if($match) {
     if ($_SERVER["REQUEST_METHOD"] == "GET") {
         $_GET = array_merge($match['params'],$_GET);
@@ -92,12 +90,41 @@ if($match) {
     define("CURRENT_PAGE", str_replace('.php', '', $match['target']));
 
     check_affiliate();
+
+    if(isset($_GET['quickapp'])){
+        $_COOKIE['quickapp'] = 1;
+        setcookie('quickapp', 1, time() + (86400 * 30), "/");
+    }
+
+    /* get user data */
+    $current_user = null;
+    if(checkloggedin()) {
+        $current_user = get_user_data(null, $_SESSION['user']['id']);
+
+        /* check for free plan */
+        if(CURRENT_PAGE != 'app/home' && strpos(CURRENT_PAGE, 'app/') !== false) {
+            if ($current_user['group_id'] == 'free') {
+                /* redirect to membership page if free plan is disabled */
+                $free_plan = json_decode(get_option('free_membership_plan'), true);
+                if (!$free_plan['status']) {
+                    headerRedirect($config['site_url'] . 'membership/changeplan');
+                }
+            }
+        }
+        $current_user['plan'] = get_user_membership_detail($_SESSION['user']['id']);
+    }
+
     require APPPATH.$match['target'];
 }
 else {
     // current page
     define("CURRENT_PAGE", '404');
 
-   header("HTTP/1.0 404 Not Found");
-   require APPPATH.'global/404.php';
+    header("HTTP/1.0 404 Not Found");
+    require APPPATH.'global/404.php';
 }
+
+/* close DB connection */
+$mysqli->close();
+
+ORM::set_db(null);
