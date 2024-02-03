@@ -23,7 +23,7 @@ overall_header(__("All Images"));
                                 _esc(number_format((float)$total_images_used), 0) . '</i> / ' .
                                 ($images_limit == -1
                                     ? __('Unlimited')
-                                    : _esc(number_format($images_limit), 0)); ?>
+                                    : _esc(number_format($images_limit + get_user_option($_SESSION['user']['id'], 'total_images_available', 0)), 0)); ?>
                             <strong><?php _e('Images Used'); ?></strong>
                         </div>
                     </h3>
@@ -42,7 +42,7 @@ overall_header(__("All Images"));
                         <h3><i class="icon-feather-file"></i><?php _e("All Images") ?></h3>
                     </div>
                     <div class="content with-padding">
-                        <table class="basic-table">
+                        <table class="basic-table image-lightbox">
                             <thead>
                             <tr>
                                 <th data-priority="1"><?php _e("Image") ?></th>
@@ -60,9 +60,9 @@ overall_header(__("All Images"));
                             <?php foreach ($images as $image) { ?>
                                 <tr>
                                     <td data-label="<?php _e("Image") ?>">
-                                        <div class="d-flex align-items-center">
-                                            <a href="<?php echo _esc($config['site_url'],0).'storage/ai_images/'.$image['image']; ?>" target="_blank" data-tippy-placement="top" title="<?php _e("View") ?>">
-                                                <img src="<?php echo _esc($config['site_url'],0).'storage/ai_images/small_'.$image['image']; ?>" class="rounded" alt="<?php _esc($image['title']) ?>" width="60">
+                                        <div class="ai-lightbox-image-wrapper">
+                                            <a class="ai-lightbox-image" href="<?php echo _esc($config['site_url'],0).'storage/ai_images/'.$image['image']; ?>" target="_blank">
+                                                <img src="<?php echo _esc($config['site_url'],0).'storage/ai_images/small_'.$image['image']; ?>" alt="<?php _esc($image['title']) ?>" width="60px">
                                             </a>
                                             <div class="margin-left-10">
                                                 <div><strong><?php _esc($image['title']) ?></strong></div>
@@ -146,6 +146,16 @@ overall_header(__("All Images"));
         </div>
     </div>
 <?php ob_start() ?>
+    <link href="<?php _esc(TEMPLATE_URL); ?>/css/lightbox/lightgallery.min.css" rel="stylesheet">
+    <script src="<?php _esc(TEMPLATE_URL); ?>/js/lightgallery.min.js"></script>
+    <script>
+        $( ".image-lightbox" ).each(function() {
+            lightGallery($(this).get(0),{
+                selector: '.ai-lightbox-image',
+                download: true,
+            });
+        });
+    </script>
 <?php
 $footer_content = ob_get_clean();
 include_once TEMPLATE_PATH . '/overall_footer_dashboard.php';
