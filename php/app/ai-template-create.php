@@ -1,6 +1,12 @@
 <?php
 global $config;
-if(checkloggedin())
+
+// if disabled by admin
+if(!get_option("enable_ai_templates", 1) ) {
+    page_not_found();
+}
+
+if(isset($current_user['id']))
 {
     if(!empty($_GET['slug'])) {
         $_GET['slug'] = validate_input($_GET['slug']);
@@ -20,13 +26,13 @@ if(checkloggedin())
 
         if(!empty($ai_template)) {
 
+            $ai_template['translations'] = json_decode((string) $ai_template['translations'], true);
+            $ai_template['settings'] = json_decode((string) $ai_template['settings'], true);
+
             $start = date('Y-m-01');
             $end = date_create(date('Y-m-t'))->modify('+1 day')->format('Y-m-d');
 
-            $total_words_used = ORM::for_table($config['db']['pre'] . 'word_used')
-                ->where('user_id', $_SESSION['user']['id'])
-                ->where_raw("(`date` BETWEEN '$start' AND '$end')")
-                ->sum('words');
+            $total_words_used = get_user_option($_SESSION['user']['id'], 'total_words_used', 0);
 
             $membership = get_user_membership_detail($_SESSION['user']['id']);
             $words_limit = $membership['settings']['ai_words_limit'];
