@@ -202,7 +202,6 @@ function email_template($template, $user_id=null, $password=null, $product_id=nu
         $html = str_replace ('{SITE_URL}', $config['site_url'], $html);
         $html = str_replace ('{NAME}', $_POST['name'], $html);
         $html = str_replace ('{EMAIL}', $_POST['email'], $html);
-        $html = str_replace ('{PHONE}', $_POST['phone'], $html);
         $html = str_replace ('{FEEDBACK_SUBJECT}', $_POST['subject'], $html);
         $html = str_replace ('{MESSAGE}', $_POST['message'], $html);
         $email_body = $html;
