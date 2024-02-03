@@ -16,8 +16,16 @@ if (checkloggedadmin()) {
     headerRedirect('index.php');
 }
 
+$username = $password = '';
+
+if(!check_allow()){
+    $username = $password = 'admin';
+}
+
 if(isset($_POST['username']))
 {
+    $username = $_POST['username'];
+
     $recaptcha_error = __('Error: reCAPTCHA error');
     if(get_option('recaptcha_mode') == 1){
         if(isset($_POST['g-recaptcha-response']) && !empty($_POST['g-recaptcha-response'])) {
@@ -83,7 +91,7 @@ if(isset($_POST['username']))
             <div class="col-sm-12 col-md-6 offset-md-3">
                 <div class="quick-card card m-t-50">
                     <div class="card-body">
-                        <div class="text-center m-b-20"><img class="img-responsive w-100" src="../storage/logo/<?php echo $config['site_admin_logo']?>" alt="Sahil" /></div>
+                        <div class="text-center m-b-20"><img class="img-responsive w-100" src="../storage/logo/<?php echo $config['site_admin_logo']?>" alt="bylancer" /></div>
                         <?php if(!empty($error)){ ?>
                         <div class="alert alert-danger m-b-20">
                             <?php echo $error; ?>
@@ -92,11 +100,11 @@ if(isset($_POST['username']))
                         <form action="#" method="post">
                             <div class="form-group">
                                 <label for="username"><?php _e('Email or Username') ?></label>
-                                <input type="text" name="username" class="form-control" id="username"  />
+                                <input type="text" name="username" class="form-control" id="username" value="<?php _esc($username) ?>" />
                             </div>
                             <div class="form-group">
                                 <label for="login_password"><?php _e('Password') ?></label>
-                                <input type="password" name="password" class="form-control" id="login_password"  />
+                                <input type="password" name="password" class="form-control" id="login_password" value="<?php _esc($password) ?>" />
                             </div>
                             <?php
                             if(get_option('recaptcha_mode') == 1){
