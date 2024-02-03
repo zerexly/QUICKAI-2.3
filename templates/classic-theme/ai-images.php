@@ -24,7 +24,7 @@ overall_header(__("AI Images"));
                                 _esc(number_format((float)$total_images_used), 0) . '</i> / ' .
                                 ($images_limit == -1
                                     ? __('Unlimited')
-                                    : _esc(number_format($images_limit), 0)); ?>
+                                    : _esc(number_format($images_limit + get_user_option($_SESSION['user']['id'], 'total_images_available', 0)), 0)); ?>
                             <strong><?php _e('Images Used'); ?></strong>
                         </div>
                     </h3>
@@ -50,10 +50,10 @@ overall_header(__("AI Images"));
                 <form id="ai_images" name="ai_images" method="post" action="#">
                     <h4 class="margin-bottom-10 padding-left-5"><?php _e("Start with a detailed description.") ?> <a href="#" class="try-example"><strong><?php _e("Try an example") ?></strong></a></h4>
                     <div class="message-reply ai_image_description margin-bottom-10">
-                                <textarea name="description"
-                                          class="with-border small-input image-description"
+                                <input type="text" name="description"
+                                          class="image-description"
                                           placeholder="<?php _esc($placeholders[array_rand($placeholders)]) ?>"
-                                          required></textarea>
+                                          required>
                         <button type="submit" name="submit"
                                 class="button ripple-effect border-pilled"><?php _e("Generate") ?>
                             <i class="icon-feather-arrow-right"></i></button>
@@ -144,19 +144,21 @@ overall_header(__("AI Images"));
                                 </select>
                             </div>
                         </div>
+                        <?php if (get_option('ai_image_api') != 'stable-diffusion' && check_allow()) { ?>
                         <div class="col-sm-3">
                             <div class="submit-field margin-bottom-20">
                                 <h6><?php _e("Resolution") ?></h6>
                                 <select name="resolution" id="resolution"
                                         class="with-border small-input selectpicker" required>
-                                    <?php if (get_option('ai_image_api') != 'stable-diffusion') { ?>
                                         <option value="256x256"><?php _e('Small Image (256x256)') ?></option>
-                                    <?php } ?>
                                     <option value="512x512"><?php _e('Medium Image (512x512)') ?></option>
                                     <option value="1024x1024"><?php _e('Large Image (1024x1024)') ?></option>
                                 </select>
                             </div>
                         </div>
+                        <?php } else { ?>
+                            <input type="hidden" name="resolution" value="256x256">
+                        <?php } ?>
                         <div class="col-sm-3">
                             <div class="submit-field margin-bottom-20">
                                 <h6><?php _e("Number of Images") ?></h6>
@@ -178,14 +180,13 @@ overall_header(__("AI Images"));
                     </div>
                 </form>
                 <hr>
-                <div class="row margin-top-25" id="generated_images_wrapper">
+                <div class="row margin-top-25 margin-bottom-25 image-lightbox" id="generated_images_wrapper">
                     <?php foreach ($ai_images as $ai_image) { ?>
                         <div class="col-sm-4 col-md-2 col-6 margin-bottom-30">
                             <a href="<?php echo _esc($config['site_url'], 0) . 'storage/ai_images/' . $ai_image['image']; ?>"
-                               target="_blank">
-                                <img class="lazy-load rounded"
-                                     src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAAANSURBVBhXYzh8+PB/AAffA0nNPuCLAAAAAElFTkSuQmCC"
-                                     data-original="<?php echo _esc($config['site_url'], 0) . 'storage/ai_images/small_' . $ai_image['image']; ?>"
+                               target="_blank" class="ai-lightbox-image">
+                                <img width="100%"
+                                     src="<?php echo _esc($config['site_url'], 0) . 'storage/ai_images/small_' . $ai_image['image']; ?>"
                                      alt="<?php _esc($ai_image['description']) ?>" data-tippy-placement="top"
                                      title="<?php _esc($ai_image['description']) ?>">
                             </a>
@@ -222,16 +223,13 @@ overall_header(__("AI Images"));
         </div>
     </div>
 <?php ob_start() ?>
-    <script src="<?php _esc(TEMPLATE_URL); ?>/js/jquery-simple-txt-counter.min.js"></script>
+    <link href="<?php _esc(TEMPLATE_URL); ?>/css/lightbox/lightgallery.min.css" rel="stylesheet">
+    <script src="<?php _esc(TEMPLATE_URL); ?>/js/lightgallery.min.js"></script>
     <script>
-        // text counter
-        $('.quick-text-counter').each(function () {
-            var $this = $(this);
-
-            $this.simpleTxtCounter({
-                maxLength: $this.data('maxlength'),
-                countElem: '<div class="form-text"></div>',
-                lineBreak: false,
+        $( ".image-lightbox" ).each(function() {
+            lightGallery($(this).get(0),{
+                selector: '.ai-lightbox-image',
+                download: true,
             });
         });
 
