@@ -51,6 +51,36 @@ jQuery(function ($) {
         return false;
     });
 
+    $("#newsletter-form").on('submit', function (e) {
+        e.preventDefault();
+        $("#newsletter-form-status").slideUp();
+        var $btn = $(this).find('.btn');
+        $btn.addClass('button-progress').prop('disabled', true);
+        var form_data = {
+            action: 'add_email_subscriber',
+            email: $(".newsletter-email").val(),
+        };
+        $.ajax({
+            type: "POST",
+            url: ajaxurl,
+            data: form_data,
+            dataType: 'json',
+            success: function (response) {
+                $btn.removeClass('button-progress').prop('disabled', false);
+                if (response.success) {
+                    $("#newsletter-form-status").addClass('success').removeClass('error').html(response.message ).slideDown();
+                    $(".newsletter-email").val('');
+                } else {
+                    $("#newsletter-form-status").removeClass('success').addClass('error').html(response.message).slideDown();
+                }
+                setTimeout(function() {
+                    $('#newsletter-form-status').slideUp();
+                }, 5000);
+            }
+        });
+        return false;
+    });
+
     // blog comment with ajax
     $('.blog-comment-form').on('submit', function (e) {
         e.preventDefault();
@@ -99,37 +129,67 @@ jQuery(function ($) {
         $btn.addClass('button-progress').prop('disabled', true);
 
         $error.slideUp();
-        $.ajax({
-            type: "POST",
-            url: ajaxurl + '?action=' + action,
-            data: data,
-            dataType: 'json',
-            cache: false,
-            contentType: false,
-            processData: false,
-            success: function (response) {
+
+        data = $form.serialize();
+
+        let eventSource = new EventSource(`${ajaxurl}?action=${action}&${data}`);
+
+        let msg = tinymce.activeEditor.getContent();
+        if (msg) {
+            msg += '\n\n'
+        }
+
+        let ENABLE_STREAMING = true;
+
+        eventSource.onmessage = function (e) {
+            if (e.data === "[DONE]") {
                 $btn.removeClass('button-progress').prop('disabled', false);
-                if (response.success) {
-                    let old_content = tinymce.activeEditor.getContent();
-                    if (old_content) {
-                        old_content += '<br><br>'
+
+                if(!ENABLE_STREAMING) {
+                    let str = msg;
+
+                    str = str.replace(/```(\w+)?([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+                    str = str.replace(/(?:\r\n|\r|\n)/g, '<br>');
+
+                    tinymce.activeEditor.setContent(str);
+                }
+
+                eventSource.close();
+
+            } else {
+                let error = JSON.parse(e.data).error;
+                if (error !== undefined) {
+                    console.log(e.data);
+                    eventSource.close();
+                    $btn.removeClass('button-progress').prop('disabled', false);
+                    $error.html(error).slideDown().focus();
+                    return;
+                }
+
+                let data = JSON.parse(e.data);
+                let txt = data.choices[0].delta.content;
+                if (txt !== undefined) {
+                    msg = msg + txt;
+
+                    if(!ENABLE_STREAMING) {
+                        return;
                     }
-                    tinymce.activeEditor.setContent(old_content + response.text);
-                    tinymce.activeEditor.focus();
 
-                    tinyMCE.activeEditor.selection.select(tinyMCE.activeEditor.getBody(), true);
-                    tinyMCE.activeEditor.selection.collapse(false);
+                    let str = msg;
 
-                    $('.simplebar-scroll-content').animate({
-                        scrollTop: $("#content-focus").offset().top
-                    }, 500);
+                    str = str.replace(/```(\w+)?([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+                    str = str.replace(/(?:\r\n|\r|\n)/g, '<br>');
 
-                    animate_value('quick-words-left', response.old_used_words, response.current_used_words, 4000)
-                } else {
-                    $error.html(response.error).slideDown().focus();
+                    tinymce.activeEditor.setContent(str);
                 }
             }
-        });
+        };
+        eventSource.onerror = function (e) {
+            $btn.removeClass('button-progress').prop('disabled', false);
+            console.log(e);
+            eventSource.close();
+        };
+
     });
 
     /* generate speech to text */
@@ -200,15 +260,12 @@ jQuery(function ($) {
             success: function (response) {
                 $btn.removeClass('button-progress').prop('disabled', false);
                 if (response.success) {
-                    tinymce.activeEditor.setContent(response.text);
-                    tinymce.activeEditor.focus();
-
-                    tinyMCE.activeEditor.selection.select(tinyMCE.activeEditor.getBody(), true);
-                    tinyMCE.activeEditor.selection.collapse(false);
+                    $("#content-focus").html(response.text);
 
                     $('.simplebar-scroll-content').animate({
                         scrollTop: $("#content-focus").offset().top
                     }, 500);
+                    hljs.highlightAll();
 
                     animate_value('quick-words-left', response.old_used_words, response.current_used_words, 4000)
                 } else {
@@ -286,14 +343,54 @@ jQuery(function ($) {
                     $('#generated_images_notice').hide();
 
                     $.each(response.data, function( index, value ) {
-                        $("#generated_images_wrapper").prepend('<div class="col-sm-4 col-md-2 col-6 margin-bottom-30"><a href="'+ value.large +'" target="_blank"><img class="rounded" src="'+ value.small +'" alt="" data-tippy-placement="top" title="'+ response.description +'"></a></div>')
+                        $("#generated_images_wrapper").prepend('<div class="col-sm-4 col-md-2 col-6 margin-bottom-30"><a href="'+ value.large +'" target="_blank" class="ai-lightbox-image"><img width="100%" src="'+ value.small +'" alt="" data-tippy-placement="top" title="'+ response.description +'"></a></div>')
+                    });
+
+                    /* refresh lightbox */
+                    window.lgData[$('.image-lightbox').attr('lg-uid')].destroy(true);
+                    lightGallery($('.image-lightbox').get(0),{
+                        selector: '.ai-lightbox-image',
+                        download: true,
                     });
 
                     animate_value('quick-images-left', response.old_used_images, response.current_used_images, 1000)
 
                     $('.simplebar-scroll-content').animate({
-                        scrollTop: $("#content-focus").offset().top
+                        scrollTop: $("#generated_images_wrapper").offset().top
                     }, 500);
+                } else {
+                    $error.html(response.error).slideDown().focus();
+                }
+            }
+        });
+    });
+
+    /* ai images */
+    $('#ai_text_speech').on('submit', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var action = 'text_to_speech';
+        var data = new FormData(this),
+            $form = $(this);
+
+        var $btn = $(this).find('.button'),
+            $error = $(this).find('.form-error');
+        $btn.addClass('button-progress').prop('disabled', true);
+
+        $error.slideUp();
+        $.ajax({
+            type: "POST",
+            url: ajaxurl + '?action=' + action,
+            data: data,
+            dataType: 'json',
+            cache: false,
+            contentType: false,
+            processData: false,
+            success: function (response) {
+                $btn.removeClass('button-progress').prop('disabled', false);
+                if (response.success) {
+                    location.reload();
                 } else {
                     $error.html(response.error).slideDown().focus();
                 }
@@ -341,9 +438,11 @@ jQuery(function ($) {
     });
 
     function animate_value(id, start, end, duration) {
+        start = parseInt(start);
+        end = parseInt(end);
         if (start === end) return;
         var range = end - start;
-        var current = start;
+        var current = parseInt(start);
         var increment = end > start? 1 : -1;
         var stepTime = Math.abs(Math.floor(duration / range));
         var obj = document.getElementById(id);
