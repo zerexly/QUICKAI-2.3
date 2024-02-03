@@ -138,10 +138,6 @@ $email_template = [
                 'code' => '{EMAIL}'
             ],
             [
-                'title' => __('User phone number'),
-                'code' => '{PHONE}'
-            ],
-            [
                 'title' => __('Feedback email subject'),
                 'code' => '{FEEDBACK_SUBJECT}'
             ],
