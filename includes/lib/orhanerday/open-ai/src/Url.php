@@ -160,4 +160,24 @@ class Url
     {
         return self::OPEN_AI_URL . "/chat/completions";
     }
+
+    /**
+     * (quickai)
+     * @return string
+     */
+    public static function usedBalance(): string
+    {
+        $start_date = date('Y-m-01');
+        $now = date('Y-m-d', strtotime("+1 day"));
+        return self::ORIGIN . "/dashboard/billing/usage?start_date=$start_date&end_date=$now";
+    }
+
+    /**
+     * (quickai)
+     * @return string
+     */
+    public static function balanceHardLimit(): string
+    {
+        return self::ORIGIN . "/dashboard/billing/subscription";
+    }
 }
