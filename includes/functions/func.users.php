@@ -277,17 +277,17 @@ function get_user_membership_settings()
 function get_user_membership_detail($user_id)
 {
     global $config;
-    $info = ORM::for_table($config['db']['pre'] . 'upgrades')
-        ->where('user_id', $user_id)
-        ->find_one();
-    if (!isset($info['sub_id'])) {
+    // Get usergroup details
+    $group_id = get_user_group();
+
+    if (empty($group_id) || $group_id == 'free') {
         return json_decode(get_option('free_membership_plan'), true);
     }
-    if ($info['sub_id'] == 'trial') {
+    if ($group_id == 'trial') {
         $sub_info = json_decode(get_option('trial_membership_plan'), true);
     } else {
         $sub_info = ORM::for_table($config['db']['pre'] . 'plans')
-            ->where('id', $info['sub_id'])
+            ->where('id', $group_id)
             ->find_one();
 
         if (!isset($sub_info['id'])) {
@@ -386,6 +386,7 @@ function change_user_lang($lang_code)
     if ($config['userlangsel'] == '1') {
         $config['lang'] = $lang_code['file_name'];
         $config['lang_code'] = get_current_lang_code();
+        setlocale(LC_TIME, $config['lang_code']);
     }
 }
 
@@ -399,12 +400,28 @@ function check_user_lang()
 
     global $config;
 
+    if(!empty($_GET['lang'])) {
+        change_user_lang($_GET['lang']);
+        return $config['lang'];
+    }
+
     if ($config['userlangsel'] == '1') {
         $cookie_name = "Quick_lang";
         if (isset($_COOKIE[$cookie_name])) {
             $config['lang'] = $_COOKIE[$cookie_name];
+            return $config['lang'];
+        } else {
+            /* Get language from browser */
+            if(get_option('browser_lang')) {
+                $browser_language_code = isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? mb_substr($_SERVER['HTTP_ACCEPT_LANGUAGE'], 0, 2) : null;
+                if ($browser_language_code) {
+                    change_user_lang($browser_language_code);
+                    return $config['lang'];
+                }
+            }
         }
     }
+
     return $config['lang'];
 }
 
@@ -572,7 +589,7 @@ function create_user_session($userid, $username, $password, $user_type = '')
     $user_id = preg_replace("/[^0-9]+/", "", $userid); // XSS protection as we might print this value
     $_SESSION['user']['id'] = $user_id;
 
-    $username = preg_replace("/[^a-zA-Z0-9_\-]+/", "", $username); // XSS protection as we might print this value
+    //$username = preg_replace("/[^a-zA-Z0-9_\-]+/", "", $username); // XSS protection as we might print this value
     $_SESSION['user']['username'] = $username;
     $_SESSION['user']['user_type'] = $user_type;
 
@@ -592,10 +609,9 @@ function userlogin($email, $password)
 {
     global $config, $user_id, $username, $db_password, $where;
 
-    $regex = '/^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$/';
 
     if (!preg_match("/^[[:alnum:]]+$/", $email)) {
-        if (!preg_match($regex, $email)) {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return false;
         } else {
             //checking in email
@@ -651,11 +667,11 @@ function userlogin($email, $password)
         } else {
             // Password is not correct
             // We record this attempt in the database
-            $now = time();
+            /*$now = time();
             $login_attempts = ORM::for_table($config['db']['pre'] . 'login_attempts')->create();
             $login_attempts->user_id = $user_id;
             $login_attempts->time = $now;
-            $login_attempts->save();
+            $login_attempts->save();*/
 
             return false;
         }
@@ -800,6 +816,7 @@ function checkSocialUser($userData, $picname)
             $now = date("Y-m-d H:i:s");
 
             $insert_user = ORM::for_table($config['db']['pre'] . 'user')->create();
+            $insert_user->group_id = get_option("default_user_plan");
             $insert_user->oauth_provider = $userData['oauth_provider'];
             $insert_user->oauth_uid = $userData['oauth_uid'];
             $insert_user->status = '1';
@@ -813,7 +830,7 @@ function checkSocialUser($userData, $picname)
             $insert_user->created_at = $now;
             $insert_user->updated_at = $now;
             $insert_user->country = $location['country'];
-            $insert_user->city = $location['city'];
+            //$insert_user->city = $location['city'];
             $insert_user->referral_key = uniqid(get_random_string(5));
 
             // check for referral cookie
@@ -829,6 +846,23 @@ function checkSocialUser($userData, $picname)
             $insert_user->save();
 
             $user_id = $insert_user->id();
+
+            /* Setup trial membership */
+            if(get_option("default_user_plan") == 'trial')
+            {
+                $plan = json_decode(get_option('trial_membership_plan'), true);
+
+                $upgrades_insert = ORM::for_table($config['db']['pre'].'upgrades')->create();
+                $upgrades_insert->sub_id = 'trial';
+                $upgrades_insert->user_id = $user_id;
+                $upgrades_insert->upgrade_lasttime = time();
+                $upgrades_insert->upgrade_expires = time() + $plan['days'] * 86400;
+                $upgrades_insert->status = 'Active';
+                $upgrades_insert->save();
+
+                update_user_option($user_id, 'package_trial_done',1);
+            }
+
             // Get user data from the database
             $userData['id'] = $user_id;
             $userData['username'] = $username;
@@ -854,7 +888,11 @@ function checkSocialUser($userData, $picname)
 function get_user_data($username = null, $userid = null)
 {
 
-    global $config;
+    global $config, $current_user;
+
+    if(isset($current_user['id']) && $userid == $current_user['id']){
+        return $current_user;
+    }
 
     if ($username != null) {
         $info = ORM::for_table($config['db']['pre'] . 'user')
@@ -868,6 +906,7 @@ function get_user_data($username = null, $userid = null)
 
     if (isset($info['id'])) {
         $userinfo['id'] = $info['id'];
+        $userinfo['group_id'] = !empty($info['group_id']) ? $info['group_id'] : 'free';
         $userinfo['username'] = $info['username'];
         $userinfo['user_type'] = $info['user_type'];
         $userinfo['balance'] = $info['balance'];
@@ -1133,7 +1172,7 @@ function check_affiliate_payment($person, $txn_type, $amount, $gateway, $transac
 
         if(!empty($person->referred_by)){
 
-            if((get_option('affiliate_rule') == 'all') || (get_option('affiliate_rule') == 'first' && $txn_type == 'subscr_signup')){
+            if((get_option('affiliate_rule') == 'all') || (get_option('affiliate_rule') == 'first' && !get_user_option($person->id, 'affiliate_converted', 0))){
 
                 $referral_user = ORM::for_table($config['db']['pre'] . 'user')
                     ->find_one($person->referred_by);
@@ -1156,6 +1195,8 @@ function check_affiliate_payment($person, $txn_type, $amount, $gateway, $transac
                     $affiliates->gateway = $gateway;
                     $affiliates->date = date('Y-m-d H:i:s');
                     $affiliates->save();
+
+                    update_user_option($person->id, 'affiliate_converted', 1);
                 }
             }
         }
