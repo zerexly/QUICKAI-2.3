@@ -8,12 +8,14 @@ $timenow = date('Y-m-d H:i:s');
 if (isset($config['quickad_debug']) && $config['quickad_debug'] == 1) {
     error_reporting(E_ALL);
     ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+
+    ini_set('log_errors', TRUE); // Error/Exception file logging engine.
+    ini_set('error_log', ROOTPATH . '/errors.log'); // Logging file path
 } else {
     error_reporting(E_ALL);
     ini_set('display_errors', 0);
 }
-ini_set('log_errors', TRUE); // Error/Exception file logging engine.
-ini_set('error_log', ROOTPATH . '/errors.log'); // Logging file path
 
 /**
  * Check script is installed
@@ -71,28 +73,19 @@ function getLocationInfoByIp()
         try {
             require_once ROOTPATH . '/includes/database/geoip/autoload.php';
             // Country DB
-            $reader = new \MaxMind\Db\Reader(ROOTPATH . '/includes/database/geoip/geo_city.mmdb');
+            $reader = new \MaxMind\Db\Reader(ROOTPATH . '/includes/database/geoip/geo_country.mmdb');
             $data = $reader->get($ip);
             $result['countryCode'] = @strtoupper(trim($data['country']['iso_code']));
             $result['country'] = trim($data['country']['names']['en']);
-            $result['city'] = trim($data['city']['names']['en']);
-            $result['latitude'] = trim($data['location']['latitude']);
-            $result['longitude'] = trim($data['location']['longitude']);
         } catch (Exception $e) {
             error_log($e->getMessage());
 
             $result['countryCode'] = "";
             $result['country'] = "";
-            $result['city'] = "";
-            $result['latitude'] = "";
-            $result['longitude'] = "";
         }
     } else {
         $result['countryCode'] = "";
         $result['country'] = "";
-        $result['city'] = "";
-        $result['latitude'] = "";
-        $result['longitude'] = "";
     }
 
     return $result;
@@ -131,16 +124,25 @@ function overall_header($page_title = '', $meta_desc = '', $meta_image = '', $me
     $page_link = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
     $meta_desc = ($meta_desc == '') ? $config['meta_description'] : $meta_desc;
 
-    $meta_image = $config['site_url'] . 'storage/logo/' . $config['site_logo'];
+    if (empty($meta_image)) {
+        if(get_option('site_metaimage')){
+            $meta_image = $config['site_url'] . 'storage/logo/' . get_option('site_metaimage');
+        } else {
+            $meta_image = $config['site_url'] . 'storage/logo/' . $config['site_logo'];
+        }
+
+    }
 
     if ($meta_article) {
         $meta_content = 'article';
-        if (empty($meta_image)) {
-            $meta_image = $config['site_url'] . 'storage/logo/' . $config['site_logo'];
-        }
     } else {
         $meta_content = 'website';
     }
+
+    $html_pages = ORM::for_table($config['db']['pre'] . 'pages')
+        ->where('translation_lang', $config['lang_code'])
+        ->where('type', '1')
+        ->find_many();
 
     //Print Template 'overall_header'
     HtmlTemplate::display('overall_header', array(
@@ -153,7 +155,8 @@ function overall_header($page_title = '', $meta_desc = '', $meta_image = '', $me
         'lang_direction' => get_current_lang_direction(),
         'fullname' => $fullname,
         'balance' => $balance,
-        'languages' => get_language_list('', 'selected', true)
+        'languages' => get_language_list('', 'selected', true),
+        'html_pages' => $html_pages,
     ));
 
 }
@@ -1088,7 +1091,7 @@ function email($email_to, $email_to_name, $email_subject, $email_body, $bcc = ar
         $email_subject = stripcslashes(nl2br($email_subject));
     }
 
-    include(dirname(__FILE__) . DIRECTORY_SEPARATOR . "../lib/phpmailer/init.engine.php");
+    return include(dirname(__FILE__) . DIRECTORY_SEPARATOR . "../lib/phpmailer/init.engine.php");
 
 }
 
@@ -1155,7 +1158,7 @@ function transfer($url, $msg, $page_title = '')
     echo "</script>\n";
     echo "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\"></head>\n";
     echo "<body onload=\"window.setTimeout('changeurl();',2000);\">\n";
-    echo "<table width='95%' height='85%' style='margin: 100px'>\n";
+    echo "<table width='85%' height='85%' style='margin: 100px'>\n";
     echo "<tr>\n";
     echo "<td valign='middle'>\n";
     echo "<table align='center' border=\"0\" cellspacing=\"1\" cellpadding=\"0\" bgcolor=\"#fff\">\n";
@@ -1166,7 +1169,7 @@ function transfer($url, $msg, $page_title = '')
     echo "<td width=\"100%\" align=\"center\" id=alt1>\n";
     echo $msg . "<br><br>\n";
     echo "<div><img src=\"" . $config['site_url'] . "includes/assets/images/loading.gif\"/></div><br><br>\n";
-    echo "(<a href='" . $url . "'>Or click here if you do not wish to wait</a>)</td>\n";
+    echo "(<a href='" . $url . "'>".__('Or click here if you do not wish to wait')."</a>)</td>\n";
     echo "</tr>\n";
     echo "</table>\n";
     echo "</td>\n";
@@ -1256,10 +1259,11 @@ function get_client_ip()
  * Validate request's data
  *
  * @param string|array $input
- * @param false $allow_html
+ * @param bool $allow_html
+ * @param bool $allow_iframe
  * @return string|array
  */
-function validate_input($input, $allow_html = false)
+function validate_input($input, $allow_html = false, $allow_iframe = false)
 {
     if ($input == null) {
         return $input;
@@ -1270,15 +1274,24 @@ function validate_input($input, $allow_html = false)
         }
         return $input;
     } else {
-        //$input = stripslashes($input);
+
         if ($allow_html) {
             $config = HTMLPurifier_Config::createDefault();
             $config->set('HTML.Nofollow', true);
             $config->set('HTML.TargetBlank', true);
             $config->set('Attr.EnableID', true);
             $config->set('CSS.AllowTricky', true);
-            $config->set('HTML.Allowed', 'p,b,i,em,br,strong,div,a,span,ul,ol,li,img,table,thead,th,tr,td');
+
+            if($allow_iframe) {
+                $config->set('HTML.SafeIframe', true);
+                $config->set('URI.SafeIframeRegexp', '%^(https?:)?//%'); //allow Safe Url
+            }
+            $config->set('HTML.Allowed', 'p,b,i,em,br,strong,div,a,span,ul,ol,li,img,table,thead,th,tr,td,iframe');
             $config->set('HTML.AllowedAttributes', 'a.href,a.target,a.rel,a.id,src, height, width, alt, style, class');
+
+            $def = $config->getHTMLDefinition(true);
+            $def->addAttribute('iframe', 'allowfullscreen', 'Bool');
+
             $purifier = new HTMLPurifier($config);
             $input = $purifier->purify($input);
         } else {
@@ -1299,8 +1312,8 @@ function validate_input($input, $allow_html = false)
 function strlimiter($str, $limit)
 {
 
-    if (strlen($str) > $limit)
-        $string = substr($str, 0, $limit) . '...';
+    if (mb_strlen($str) > $limit)
+        $string = mb_substr($str, 0, $limit) . '...';
     else
         $string = $str;
 
@@ -1533,16 +1546,9 @@ function de_sanitize($text)
  * @param bool $htmlspecialchars
  * @return string
  */
-function escape($text, $htmlspecialchars = true)
+function escape($text)
 {
-    //$text = strip_tags($text);
-    if ($htmlspecialchars)
-        $text = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
-
-    //$text = str_replace("\n\r","\n",$text);
-    //$text = str_replace("\r\n","\n",$text);
-    //$text = str_replace("\n","<br>",$text);
-    return $text;
+    return htmlspecialchars((string)$text, ENT_QUOTES, 'UTF-8');
 }
 
 /**
@@ -2315,7 +2321,7 @@ function payment_success_save_detail($access_token)
     $billing = array(
         'type' => get_user_option($_SESSION['user']['id'], 'billing_details_type'),
         'tax_id' => get_user_option($_SESSION['user']['id'], 'billing_tax_id'),
-        'name' => get_user_option($_SESSION['user']['id'], 'billing_name'),
+        'name' => get_user_option($_SESSION['user']['id'], 'billing_name', $_SESSION['user']['username']),
         'address' => get_user_option($_SESSION['user']['id'], 'billing_address'),
         'city' => get_user_option($_SESSION['user']['id'], 'billing_city'),
         'state' => get_user_option($_SESSION['user']['id'], 'billing_state'),
@@ -2415,11 +2421,11 @@ function payment_success_save_detail($access_token)
             $trans_insert = ORM::for_table($config['db']['pre'] . 'transaction')->create();
             $trans_insert->product_name = $title;
             $trans_insert->product_id = $subcription_id;
-            $trans_insert->user_id = $user_id;
+            $trans_insert->seller_id = $user_id;
             $trans_insert->status = 'success';
             $trans_insert->base_amount = $base_amount;
             $trans_insert->amount = $amount;
-            $trans_insert->currency_code = $config['currency_code'];
+            //$trans_insert->currency_code = $config['currency_code'];
             $trans_insert->transaction_gatway = $folder;
             $trans_insert->transaction_ip = $ip;
             $trans_insert->transaction_time = $now;
@@ -2431,12 +2437,83 @@ function payment_success_save_detail($access_token)
             $trans_insert->save();
 
             // check for affiliate payment
+            $person = ORM::for_table($config['db']['pre'] . 'user')->find_one($user_id);
             check_affiliate_payment($person, $txn_type, $amount, $folder, $trans_insert->id);
+
+            // reset user's data
+            update_user_option($user_id, 'total_words_used', 0);
+            update_user_option($user_id, 'total_images_used', 0);
+            update_user_option($user_id, 'total_speech_used', 0);
+            update_user_option($user_id, 'total_text_to_speech_used', 0);
+
+            update_user_option($user_id, 'last_reset_time', time());
 
             unset($_SESSION['quickad'][$access_token]);
             message(__("Success"), __("Payment Successful"), $link['TRANSACTION']);
             exit();
         } else {
+            unset($_SESSION['quickad'][$access_token]);
+            error(__("Invalid Transaction"), __LINE__, __FILE__, 1);
+            exit();
+        }
+    } elseif ($payment_type == "prepaid_plan") {
+        $trans_desc = $title;
+        $base_amount = $_SESSION['quickad'][$access_token]['base_amount'];
+        $subcription_id = $_SESSION['quickad'][$access_token]['sub_id'];
+
+        // Check that the payment is valid
+        $subsc_details = ORM::for_table($config['db']['pre'] . 'prepaid_plans')
+            ->where('id', $subcription_id)
+            ->find_one();
+        if (!empty($subsc_details)) {
+//Update Amount in balance table
+            $balance = ORM::for_table($config['db']['pre'] . 'balance')->find_one(1);
+            $current_amount = $balance['current_balance'];
+            $total_earning = $balance['total_earning'];
+
+            $updated_amount = ($amount + $current_amount);
+            $total_earning = ($amount + $total_earning);
+
+            $balance->current_balance = $updated_amount;
+            $balance->total_earning = $total_earning;
+            $balance->save();
+
+            $trans_insert = ORM::for_table($config['db']['pre'] . 'transaction')->create();
+            $trans_insert->product_name = $title;
+            $trans_insert->product_id = $subcription_id;
+            $trans_insert->seller_id = $user_id;
+            $trans_insert->status = 'success';
+            $trans_insert->base_amount = $base_amount;
+            $trans_insert->amount = $amount;
+            //$trans_insert->currency_code = $config['currency_code'];
+            $trans_insert->transaction_gatway = $folder;
+            $trans_insert->transaction_ip = $ip;
+            $trans_insert->transaction_time = $now;
+            $trans_insert->transaction_description = $trans_desc;
+            $trans_insert->transaction_method = 'prepaid_plan';
+            $trans_insert->billing = json_encode($billing, JSON_UNESCAPED_UNICODE);
+            $trans_insert->taxes_ids = $taxes_ids;
+            $trans_insert->save();
+
+            // update user's data
+            $settings = json_decode($subsc_details['settings'], true);
+
+            $total_words_available = get_user_option($user_id, 'total_words_available', 0);
+            update_user_option($user_id, 'total_words_available', $total_words_available + $settings['ai_words_limit']);
+
+            $total_images_available = get_user_option($user_id, 'total_images_available', 0);
+            update_user_option($user_id, 'total_images_available', $total_images_available + $settings['ai_images_limit']);
+
+            $total_speech_available = get_user_option($user_id, 'total_speech_available', 0);
+            update_user_option($user_id, 'total_speech_available', $total_speech_available + $settings['ai_speech_to_text_limit']);
+
+            $total_text_to_speech_available = get_user_option($user_id, 'total_text_to_speech_available', 0);
+            update_user_option($user_id, 'total_text_to_speech_available', $total_text_to_speech_available + $settings['ai_text_to_speech_limit']);
+
+            unset($_SESSION['quickad'][$access_token]);
+            message(__("Success"), __("Payment Successful"), $link['TRANSACTION']);
+            exit();
+        }else {
             unset($_SESSION['quickad'][$access_token]);
             error(__("Invalid Transaction"), __LINE__, __FILE__, 1);
             exit();
@@ -2752,17 +2829,34 @@ function payment_fail_save_detail($access_token)
         $trans_insert = ORM::for_table($config['db']['pre'] . 'transaction')->create();
         $trans_insert->product_name = $title;
         $trans_insert->product_id = $subcription_id;
-        $trans_insert->user_id = $user_id;
+        $trans_insert->seller_id = $user_id;
         $trans_insert->status = 'failed';
         $trans_insert->amount = $amount;
-        $trans_insert->currency_code = $config['currency_code'];
+        //$trans_insert->currency_code = $config['currency_code'];
         $trans_insert->transaction_gatway = $folder;
         $trans_insert->transaction_ip = $ip;
         $trans_insert->transaction_time = $now;
         $trans_insert->transaction_description = $trans_desc;
         $trans_insert->transaction_method = 'Subscription';
         $trans_insert->save();
-    } else {
+    } else if ($payment_type == "prepaid_plan") {
+        $trans_desc = $title;
+        $subcription_id = $_SESSION['quickad'][$access_token]['sub_id'];
+
+        $trans_insert = ORM::for_table($config['db']['pre'] . 'transaction')->create();
+        $trans_insert->product_name = $title;
+        $trans_insert->product_id = $subcription_id;
+        $trans_insert->seller_id = $user_id;
+        $trans_insert->status = 'failed';
+        $trans_insert->amount = $amount;
+        //$trans_insert->currency_code = $config['currency_code'];
+        $trans_insert->transaction_gatway = $folder;
+        $trans_insert->transaction_ip = $ip;
+        $trans_insert->transaction_time = $now;
+        $trans_insert->transaction_description = $trans_desc;
+        $trans_insert->transaction_method = 'prepaid_plan';
+        $trans_insert->save();
+    }else {
         $item_pro_id = $_SESSION['quickad'][$access_token]['product_id'];
         $item_featured = isset($_SESSION['quickad'][$access_token]['featured']) ? $_SESSION['quickad'][$access_token]['featured'] : '0';
         $item_urgent = isset($_SESSION['quickad'][$access_token]['urgent']) ? $_SESSION['quickad'][$access_token]['urgent'] : '0';
@@ -2779,7 +2873,7 @@ function payment_fail_save_detail($access_token)
         $trans_insert = ORM::for_table($config['db']['pre'] . 'transaction')->create();
         $trans_insert->product_name = $title;
         $trans_insert->product_id = $item_pro_id;
-        $trans_insert->user_id = $user_id;
+        $trans_insert->seller_id = $user_id;
         $trans_insert->status = 'failed';
         $trans_insert->amount = $amount;
         $trans_insert->currency_code = $config['currency_code'];
@@ -2859,7 +2953,7 @@ function transaction_success($transaction_id)
     global $config;
     $mysqli = db_connect();
 
-    $result = $mysqli->query("SELECT * FROM `" . $config['db']['pre'] . "transaction` WHERE `id` = '" . $transaction_id . "' LIMIT 1");
+    $result = $mysqli->query("SELECT * FROM `" . $config['db']['pre'] . "transaction` WHERE `id` = $transaction_id LIMIT 1");
     if (mysqli_num_rows($result) > 0) {
         // output data of each row
         $info = mysqli_fetch_assoc($result);
@@ -2922,6 +3016,40 @@ function transaction_success($transaction_id)
                 ->find_one();
             // check for affiliate payment
             check_affiliate_payment($person, $txn_type, $item_amount, 'wire_transfer', $transaction_id);
+
+            // reset user's data
+            update_user_option($user_id, 'total_words_used', 0);
+            update_user_option($user_id, 'total_images_used', 0);
+            update_user_option($user_id, 'total_speech_used', 0);
+            update_user_option($user_id, 'total_text_to_speech_used', 0);
+
+            update_user_option($user_id, 'last_reset_time', time());
+
+        } elseif ($info['transaction_method'] == 'prepaid_plan') {
+
+            $package = ORM::for_table($config['db']['pre'] . 'prepaid_plans')
+                ->where('id', $item_pro_id)
+                ->find_one();
+
+            // check plan exists
+            if (!isset($package['id'])) {
+                exit('error, user does not exist');
+            }
+
+            // update user's data
+            $settings = json_decode($package['settings'], true);
+
+            $total_words_available = get_user_option($user_id, 'total_words_available', 0);
+            update_user_option($user_id, 'total_words_available', $total_words_available + $settings['ai_words_limit']);
+
+            $total_images_available = get_user_option($user_id, 'total_images_available', 0);
+            update_user_option($user_id, 'total_images_available', $total_images_available + $settings['ai_images_limit']);
+
+            $total_speech_available = get_user_option($user_id, 'total_speech_available', 0);
+            update_user_option($user_id, 'total_speech_available', $total_speech_available + $settings['ai_speech_to_text_limit']);
+
+            $total_text_to_speech_available = get_user_option($user_id, 'total_text_to_speech_available', 0);
+            update_user_option($user_id, 'total_text_to_speech_available', $total_text_to_speech_available + $settings['ai_text_to_speech_limit']);
 
         } elseif ($info['transaction_method'] == 'order_service') {
             $trans_details = json_decode((string)$info['details'], true);
@@ -3012,6 +3140,252 @@ function transaction_success($transaction_id)
 }
 
 /**
+ * Save details after webhook payment success
+ *
+ * @param $payment_gateway
+ * @param $metadata
+ * @param $payment_id
+ * @param $payment_subscription_id
+ * @param $pay_mode
+ * @param $payment_total
+ * @throws Exception
+ */
+function payment_webhook_success($payment_gateway, $metadata, $payment_id, $payment_subscription_id, $pay_mode, $payment_total){
+    global $config;
+
+    $payment_type = $metadata->payment_type;
+
+    if ($payment_type == "subscr") {
+        $user_id = (int)$metadata->user_id;
+        $package_id = (int)$metadata->package_id;
+        $payment_frequency = $metadata->payment_frequency;
+        $base_amount = $metadata->base_amount;
+        $taxes_ids = $metadata->taxes_ids;
+
+    }elseif ($payment_type == "prepaid_plan") {
+        $user_id = (int)$metadata->user_id;
+        $package_id = (int)$metadata->package_id;
+        $base_amount = $metadata->base_amount;
+        $taxes_ids = $metadata->taxes_ids;
+    }
+
+    $user = ORM::for_table($config['db']['pre'] . 'user')
+        ->where('id', $user_id)
+        ->find_one();
+
+    // check user exists
+    if (!isset($user['id'])) {
+        http_response_code(400);
+        die();
+    }
+
+    $ip = encode_ip($_SERVER, $_ENV);
+    $billing = array(
+        'type' => escape(get_user_option($user_id, 'billing_details_type')),
+        'tax_id' => escape(get_user_option($user_id, 'billing_tax_id')),
+        'name' => escape(get_user_option($user_id, 'billing_name', $user['username'])),
+        'address' => escape(get_user_option($user_id, 'billing_address')),
+        'city' => escape(get_user_option($user_id, 'billing_city')),
+        'state' => escape(get_user_option($user_id, 'billing_state')),
+        'zipcode' => escape(get_user_option($user_id, 'billing_zipcode')),
+        'country' => escape(get_user_option($user_id, 'billing_country'))
+    );
+
+    if ($payment_type == "subscr") {
+        $package = ORM::for_table($config['db']['pre'] . 'plans')
+            ->where('id', $package_id)
+            ->find_one();
+
+        // check plan exists
+        if (!isset($package['id'])) {
+            http_response_code(400);
+            die();
+        }
+
+        /* Make sure transaction is not already exist */
+        if (ORM::for_table($config['db']['pre'] . 'transaction')
+            ->where('payment_id', $payment_id)
+            ->where('transaction_gatway', $payment_gateway)
+            ->count()) {
+            http_response_code(400);
+            die();
+        }
+
+        $subsc_check = ORM::for_table($config['db']['pre'] . 'upgrades')
+            ->where('user_id', $user_id)
+            ->find_one();
+        if (isset($subsc_check['user_id'])) {
+            $txn_type = 'subscr_update';
+
+            if (!empty($subsc_check['unique_id']) && ($subsc_check['unique_id'] != $payment_subscription_id)) {
+                try {
+                    cancel_recurring_payment($user_id);
+                } catch (\Exception $e) {
+                    error_log($e->getCode());
+                    error_log($e->getMessage());
+                }
+            }
+        } else {
+            $txn_type = 'subscr_signup';
+        }
+
+        $term = 0;
+        switch ($payment_frequency) {
+            case 'MONTHLY':
+                $term = 2678400;
+                break;
+
+            case 'YEARLY':
+                $term = 31536000;
+                break;
+
+            case 'LIFETIME':
+                $term = 3153600000;
+                break;
+        }
+
+        // Add time to their subscription
+        $expires = (time() + $term);
+        $pdo = ORM::get_db();
+
+        if ($txn_type == 'subscr_update') {
+            $query = "UPDATE `" . $config['db']['pre'] . "upgrades` SET 
+            `sub_id` = '" . validate_input($package_id) . "',
+            `upgrade_expires` = '" . validate_input($expires) . "', 
+            `pay_mode` = '$pay_mode', 
+            `unique_id` = '" . ($payment_subscription_id) . "', 
+            `upgrade_lasttime` = '" . time() . "' 
+        WHERE `user_id` = '" . validate_input($user_id) . "' LIMIT 1";
+            $pdo->query($query);
+
+            // update user data
+            $user->group_id = $package_id;
+            $user->save();
+        } elseif ($txn_type == 'subscr_signup') {
+            $subscription_status = "Active";
+
+            $upgrades_insert = ORM::for_table($config['db']['pre'] . 'upgrades')->create();
+            $upgrades_insert->sub_id = $package_id;
+            $upgrades_insert->user_id = $user_id;
+            $upgrades_insert->upgrade_lasttime = time();
+            $upgrades_insert->upgrade_expires = $expires;
+            $upgrades_insert->pay_mode = $pay_mode;
+            $upgrades_insert->unique_id = $payment_subscription_id;
+            $upgrades_insert->status = $subscription_status;
+            $upgrades_insert->save();
+
+            $user->group_id = $package_id;
+            $user->save();
+        }
+
+        $trans_insert = ORM::for_table($config['db']['pre'] . 'transaction')->create();
+        $trans_insert->product_name = $package['name'];
+        $trans_insert->product_id = $package_id;
+        $trans_insert->seller_id = $user_id;
+        $trans_insert->status = 'success';
+        $trans_insert->base_amount = $base_amount;
+        $trans_insert->amount = $payment_total;
+        $trans_insert->transaction_gatway = $payment_gateway;
+        $trans_insert->transaction_ip = $ip;
+        $trans_insert->transaction_time = time();
+        $trans_insert->transaction_description = $package['name'];
+        $trans_insert->payment_id = $payment_id;
+        $trans_insert->transaction_method = 'Subscription';
+        $trans_insert->frequency = $payment_frequency;
+        $trans_insert->billing = json_encode($billing, JSON_UNESCAPED_UNICODE);
+        $trans_insert->taxes_ids = $taxes_ids;
+        $trans_insert->save();
+
+        //Update Amount in balance table
+        $balance = ORM::for_table($config['db']['pre'] . 'balance')->find_one(1);
+        $current_amount = $balance['current_balance'];
+        $total_earning = $balance['total_earning'];
+
+        $updated_amount = ($payment_total + $current_amount);
+        $total_earning = ($payment_total + $total_earning);
+
+        $balance->current_balance = $updated_amount;
+        $balance->total_earning = $total_earning;
+        $balance->save();
+
+        // check for affiliate payment
+        check_affiliate_payment($user, $txn_type, $payment_total, $payment_gateway, $trans_insert->id);
+
+        // reset user's data
+        update_user_option($user_id, 'total_words_used', 0);
+        update_user_option($user_id, 'total_images_used', 0);
+        update_user_option($user_id, 'total_speech_used', 0);
+        update_user_option($user_id, 'total_text_to_speech_used', 0);
+
+        update_user_option($user_id, 'last_reset_time', time());
+
+    }elseif ($payment_type == "prepaid_plan") {
+
+        $package = ORM::for_table($config['db']['pre'] . 'prepaid_plans')
+            ->where('id', $package_id)
+            ->find_one();
+
+        // check plan exists
+        if (!isset($package['id'])) {
+            http_response_code(400);
+            die();
+        }
+
+        /* Make sure transaction is not already exist */
+        if (ORM::for_table($config['db']['pre'] . 'transaction')
+            ->where('payment_id', $payment_id)
+            ->where('transaction_gatway', $payment_gateway)
+            ->count()) {
+            http_response_code(400);
+            die();
+        }
+//Update Amount in balance table
+        $balance = ORM::for_table($config['db']['pre'] . 'balance')->find_one(1);
+        $current_amount = $balance['current_balance'];
+        $total_earning = $balance['total_earning'];
+
+        $updated_amount = ($payment_total + $current_amount);
+        $total_earning = ($payment_total + $total_earning);
+
+        $balance->current_balance = $updated_amount;
+        $balance->total_earning = $total_earning;
+        $balance->save();
+
+        $trans_insert = ORM::for_table($config['db']['pre'] . 'transaction')->create();
+        $trans_insert->product_name = $package['name'];
+        $trans_insert->product_id = $package_id;
+        $trans_insert->seller_id = $user_id;
+        $trans_insert->status = 'success';
+        $trans_insert->base_amount = $base_amount;
+        $trans_insert->amount = $payment_total;
+        $trans_insert->transaction_gatway = $payment_gateway;
+        $trans_insert->transaction_ip = $ip;
+        $trans_insert->transaction_time = time();
+        $trans_insert->transaction_description = $package['name'];
+        $trans_insert->payment_id = $payment_id;
+        $trans_insert->transaction_method = 'prepaid_plan';
+        $trans_insert->billing = json_encode($billing, JSON_UNESCAPED_UNICODE);
+        $trans_insert->taxes_ids = $taxes_ids;
+        $trans_insert->save();
+
+        // update user's data
+        $settings = json_decode($package['settings'], true);
+
+        $total_words_available = get_user_option($user_id, 'total_words_available', 0);
+        update_user_option($user_id, 'total_words_available', $total_words_available + $settings['ai_words_limit']);
+
+        $total_images_available = get_user_option($user_id, 'total_images_available', 0);
+        update_user_option($user_id, 'total_images_available', $total_images_available + $settings['ai_images_limit']);
+
+        $total_speech_available = get_user_option($user_id, 'total_speech_available', 0);
+        update_user_option($user_id, 'total_speech_available', $total_speech_available + $settings['ai_speech_to_text_limit']);
+
+        $total_text_to_speech_available = get_user_option($user_id, 'total_text_to_speech_available', 0);
+        update_user_option($user_id, 'total_text_to_speech_available', $total_text_to_speech_available + $settings['ai_text_to_speech_limit']);
+    }
+}
+
+/**
  * Cancel recurring payment
  *
  * @param bool $user_id
@@ -3024,6 +3398,7 @@ function cancel_recurring_payment($user_id = false)
     if ($user_id) {
         $subsc_check = ORM::for_table($config['db']['pre'] . 'upgrades')
             ->where('user_id', $user_id)
+            ->use_id_column('upgrade_id')
             ->find_one();
     }
 
@@ -3037,8 +3412,7 @@ function cancel_recurring_payment($user_id = false)
 
     switch ($type) {
         case 'stripe':
-            if (file_exists('../payments/stripe/stripe-php/init.php')) {
-                include_once '../payments/stripe/stripe-php/init.php';
+                include ROOTPATH . '/includes/payments/stripe/stripe-php/init.php';
 
                 /* Initiate Stripe */
                 \Stripe\Stripe::setApiKey(get_option('stripe_secret_key'));
@@ -3047,12 +3421,11 @@ function cancel_recurring_payment($user_id = false)
                 /* Cancel the Stripe Subscription */
                 $subscription = \Stripe\Subscription::retrieve($subscription_id);
                 $subscription->cancel();
-            }
 
             break;
 
         case 'paypal':
-            include_once '../payments/paypal/paypal-sdk/autoload.php';
+            include ROOTPATH . '/includes/payments/paypal/paypal-sdk/autoload.php';
 
             /* Initiate paypal */
             $paypal = new \PayPal\Rest\ApiContext(new \PayPal\Auth\OAuthTokenCredential(get_option('paypal_api_client_id'), get_option('paypal_api_secret')));
@@ -3077,8 +3450,8 @@ function cancel_recurring_payment($user_id = false)
     }
 
     /* reset the data */
-    $subsc_check->unique_id = '';
-    $subsc_check->pay_mode = 'recurring';
+    $subsc_check->set('unique_id', '');
+    $subsc_check->set('pay_mode','one_time');
     $subsc_check->save();
 }
 
@@ -3244,6 +3617,11 @@ function print_adsense_code($slug)
             <?php }
         }
     }
+}
+
+function get_avatar_url_by_name($name, $length = 1)
+{
+    return 'https://ui-avatars.com/api/?color=random&background=random&name='.$name.'&length='.$length;
 }
 
 /**
