@@ -50,7 +50,7 @@ foreach ($queryRecords as $row) {
     //$data[] = $row;
     $id = $row['id'];
     $title = htmlentities((string)$row['title'], ENT_QUOTES, 'UTF-8');
-    $content = strlimiter(strip_tags($row['content']), 50);
+    $content = strlimiter(strip_tags((string) $row['content']), 50);
     $content = htmlentities($content, ENT_QUOTES, 'UTF-8');
     $username = htmlentities((string)$row['username'], ENT_QUOTES, 'UTF-8');
     $fullname = htmlentities((string)$row['fullname'], ENT_QUOTES, 'UTF-8');
