@@ -1,0 +1,4 @@
+#header-container, #breadcrumbs, .dashboard-sidebar, #chat-microphone { display: none !important;}
+#wrapper {padding-top: 0 !important;}
+.dashboard-content-container {padding-top: 20px !important;}
+#footer {display: none;}

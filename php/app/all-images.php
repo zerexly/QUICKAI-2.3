@@ -1,6 +1,12 @@
 <?php
 global $config;
-if (checkloggedin()) {
+
+// if disabled by admin
+if(!$config['enable_ai_images']) {
+    page_not_found();
+}
+
+if (isset($current_user['id'])) {
 
     if (!isset($_GET['page']))
         $page = 1;
@@ -36,10 +42,7 @@ if (checkloggedin()) {
     $start = date('Y-m-01');
     $end = date_create(date('Y-m-t'))->modify('+1 day')->format('Y-m-d');
 
-    $total_images_used = ORM::for_table($config['db']['pre'] . 'image_used')
-        ->where('user_id', $_SESSION['user']['id'])
-        ->where_raw("(`date` BETWEEN '$start' AND '$end')")
-        ->sum('images');
+    $total_images_used = get_user_option($_SESSION['user']['id'], 'total_images_used', 0);
 
     $membership = get_user_membership_detail($_SESSION['user']['id']);
     $images_limit = $membership['settings']['ai_images_limit'];

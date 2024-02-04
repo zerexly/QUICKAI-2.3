@@ -121,10 +121,38 @@ switch ($_GET['id']) {
                         <option value="1" <?php echo '1' == $settings['ai_chat'] ? 'selected' : '' ?>><?php _e('Allow') ?></option>
                     </select>
                     <span class="form-text text-muted"><?php _e('Allow AI Chat for this plan\'s users.') ?></span>
-                    <span class="form-text text-warning"><?php _e('<strong>ChatGPT</strong> OpenAI model is required for this feature.') ?></span>
                     <?php if (!get_option('enable_ai_chat')) { ?>
                         <small class="text-danger"><?php _e('AI chat is disabled, please enable it from the OpenAI settings to use it.'); ?></small>
                     <?php } ?>
+                </div>
+                <?php if (!get_option('single_model_for_plans')) { ?>
+                    <div class="form-group">
+                        <label for="ai_chat_model"><?php _e('OpenAI Model for AI Chat') ?></label>
+                        <select id="ai_chat_model" class="form-control" name="ai_chat_model">
+                            <?php
+                            $selected_model = $settings['ai_chat_model'];
+                            foreach (get_opeai_chat_models() as $key => $model) { ?>
+                                <option value="<?php _esc($key) ?>" <?php echo $key == $selected_model ? 'selected' : '' ?>><?php _esc($model) ?></option>
+                            <?php } ?>
+                        </select>
+                        <span class="form-text text-muted"><?php _e('Select the model for AI Chat.') ?></span>
+                    </div>
+                <?php } ?>
+                <div class="form-group">
+                    <label for="ai_chatbots"><?php _e('Chat Bots') ?></label>
+                    <select class="form-control quick-multi-select" id="ai_chatbots" name="ai_chatbots[]" multiple>
+                        <?php
+                        $settings['ai_chatbots'] = !empty($settings['ai_chatbots']) ? $settings['ai_chatbots'] : [];
+                        $chat_bots = ORM::for_table($config['db']['pre'] . 'ai_chat_bots')
+                            ->where('active', 1)
+                            ->order_by_asc('position')
+                            ->find_array();
+                        foreach ($chat_bots as $chat_bot) {
+                            echo '<option value="' . $chat_bot['id'] . '"' . (in_array($chat_bot['id'], $settings['ai_chatbots']) ? 'selected' : '') . '>' . $chat_bot['name'] . '</option>';
+                        }
+                        ?>
+                    </select>
+                    <span class="form-text text-muted"><?php _e('Select Chat Bots for this plan.') ?></span>
                 </div>
                 <div class="form-group">
                     <label for="ai_code"><?php _e('AI Code') ?></label>
@@ -135,6 +163,15 @@ switch ($_GET['id']) {
                     <span class="form-text text-muted"><?php _e('Allow AI Code for this plan\'s users.') ?></span>
                     <?php if (!get_option('enable_ai_code')) { ?>
                         <small class="text-danger"><?php _e('AI Code is disabled, please enable it from the OpenAI settings to use it.'); ?></small>
+                    <?php } ?>
+                </div>
+                <div class="form-group">
+                    <label for="ai_text_to_speech_limit"><?php _e('Text to Speech Characters Per Month') ?></label>
+                    <input name="ai_text_to_speech_limit" type="number" class="form-control"
+                           id="ai_text_to_speech_limit" value="<?php _esc($settings['ai_text_to_speech_limit']) ?>">
+                    <span class="form-text text-muted"><?php _e('Set the characters limit for text to speech. Set -1 for unlimited.') ?></span>
+                    <?php if (!get_option('enable_text_to_speech')) { ?>
+                        <small class="text-danger"><?php _e('Text to Speech is disabled, please enable it from the AI settings to use it.'); ?></small>
                     <?php } ?>
                 </div>
                 <div class="form-group">

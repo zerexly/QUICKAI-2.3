@@ -32,7 +32,12 @@ if(isset($_GET['confirm']))
     exit;
 }
 
-if(checkloggedin())
+// if disabled by admin
+if(!get_option("enable_user_registration", '1')) {
+    page_not_found();
+}
+
+if(isset($current_user['id']))
 {
     header("Location: ".$config['site_url']."dashboard");
     exit;
@@ -176,7 +181,7 @@ if(isset($_POST["submit"])) {
         $insert_user->updated_at = $now;
         $insert_user->country = $location['country'];
         $insert_user->country_code = $location['countryCode'];
-        $insert_user->city = $location['city'];
+        //$insert_user->city = $location['city'];
         $insert_user->referral_key = uniqid(get_random_string(5));
 
         // check for referral cookie
@@ -192,6 +197,22 @@ if(isset($_POST["submit"])) {
 
         $insert_user->save();
         $user_id = $insert_user->id();
+
+        /* Setup trial membership */
+        if(get_option("default_user_plan") == 'trial')
+        {
+            $plan = json_decode(get_option('trial_membership_plan'), true);
+
+            $upgrades_insert = ORM::for_table($config['db']['pre'].'upgrades')->create();
+            $upgrades_insert->sub_id = 'trial';
+            $upgrades_insert->user_id = $user_id;
+            $upgrades_insert->upgrade_lasttime = time();
+            $upgrades_insert->upgrade_expires = time() + $plan['days'] * 86400;
+            $upgrades_insert->status = 'Active';
+            $upgrades_insert->save();
+
+            update_user_option($user_id, 'package_trial_done',1);
+        }
 
         /*SEND CONFIRMATION EMAIL*/
         email_template("signup_confirm",$user_id);

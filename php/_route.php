@@ -32,6 +32,7 @@ $router->map('GET','/sitemap.xml/?', 'global/xml.php');
 $router->map('GET|POST','/imagecontent/?', 'global/imagecontent.php');
 $router->map('GET|POST','/affiliate-program/?', 'global/affiliate-program.php');
 $router->map('GET|POST','/withdrawals/?', 'global/withdrawals.php');
+$router->map('GET','/manifest.json/?', 'global/manifest_json.php');
 $router->map('GET|POST','/test/?', 'global/test.php');
 
 $router->map('GET|POST','/ai-templates/?', 'app/ai-templates.php');
@@ -40,6 +41,9 @@ $router->map('GET|POST','/ai-images/?', 'app/ai-images.php');
 $router->map('GET|POST','/all-images/?', 'app/all-images.php');
 $router->map('GET|POST','/all-documents/?', 'app/all-documents.php');
 $router->map('GET|POST','/all-documents/[*:id]/?', 'app/document.php');
-$router->map('GET|POST','/ai-chat/?', 'app/ai-chat.php');
+$router->map('GET|POST','/ai-chat-bots/?', 'app/ai-chat-bots.php');
+$router->map('GET|POST','/ai-chat/[*:id]?/?', 'app/ai-chat.php');
 $router->map('GET|POST','/ai-speech-text/?', 'app/ai-speech-text.php');
 $router->map('GET|POST','/ai-code/?', 'app/ai-code.php');
+$router->map('GET|POST','/ai-text-speech/?', 'app/ai-text-speech.php');
+$router->map('GET|POST','/all-speeches/?', 'app/all-speeches.php');

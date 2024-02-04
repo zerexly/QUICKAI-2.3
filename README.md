@@ -68,6 +68,7 @@
 - [x] Company Mission
 - [x] Company Vision
 - [x] Grammer Correction
+- [x] AI Speeches
 
 ## 🎭 Features - Ecommerce
 - [x] Product Name Generator
